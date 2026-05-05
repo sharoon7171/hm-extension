@@ -1,3 +1,5 @@
 @import "tailwindcss";
 
 @source "../options.html";
+@source "./options/**/*.{ts,tsx}";
+@source "./ui-classes/options.ts";

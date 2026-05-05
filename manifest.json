@@ -1,8 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Chrome Extension Vite React MV3 Template",
+  "name": "HotMovies Extension",
   "version": "1.0.0",
-  "description": "Template: Manifest V3, Vite, React, TypeScript, Tailwind. Rename in package.json and here after fork.",
   "action": {},
   "options_page": "options.html",
   "background": {
@@ -11,9 +10,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://www.hotmovies.com/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     }
-  ]
+  ],
+  "permissions": ["storage"],
+  "host_permissions": ["https://video.adultempire.com/*"]
 }
