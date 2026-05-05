@@ -1,16 +1,30 @@
+import fs from "node:fs";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+const rootStaticFiles = ["manifest.json", "options.html"];
+
+const copyRootStatic = (): Plugin => ({
+  name: "copy-root-static",
+  apply: "build",
+  closeBundle() {
+    const outDir = path.resolve(__dirname, "dist");
+    for (const file of rootStaticFiles) {
+      fs.copyFileSync(path.resolve(__dirname, file), path.join(outDir, file));
+    }
+  },
+});
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  publicDir: false,
+  plugins: [react(), copyRootStatic()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
     },
   },
-  publicDir: "public",
   build: {
     outDir: "dist",
     emptyOutDir: true,
