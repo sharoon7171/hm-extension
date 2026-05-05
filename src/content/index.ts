@@ -17,6 +17,10 @@ import {
   showFavoriteButtonHighlight,
 } from "./favorite-button-highlight";
 import { hideFullWidthPlayer, showFullWidthPlayer } from "./full-width-player";
+import {
+  startHideFavoritedScenes,
+  stopHideFavoritedScenes,
+} from "./hide-favorite-scene-cards";
 import { hideRedundantAttributes, showRedundantAttributes } from "./redundant-attributes";
 import { hideSceneScreenshots, showSceneScreenshots } from "./scene-screenshots";
 import {
@@ -27,6 +31,10 @@ import {
   hideScenePageStudioSurface,
   showScenePageStudioSurface,
 } from "./scene-page-studio-surface";
+import {
+  startSceneFavoriteSync,
+  stopSceneFavoriteSync,
+} from "./scene-favorite-sync";
 import { hideSiteBeacon, showSiteBeacon } from "./site-beacon";
 import {
   hideFooterMain,
@@ -53,6 +61,7 @@ async function run(): Promise<void> {
   applyStudio(settings);
   applyStar(settings);
   applyAutoFavoriteScene(settings);
+  applySceneFavoriteSync();
   if (!matchScenePage(location.href)) {
     teardownScene();
     return;
@@ -86,6 +95,8 @@ function applyGlobal(settings: Settings): void {
   else showFooterSecondary();
   if (settings.favoriteButtonHighlight) showFavoriteButtonHighlight();
   else hideFavoriteButtonHighlight();
+  if (settings.hideFavoritedScenes) startHideFavoritedScenes();
+  else stopHideFavoritedScenes();
 }
 
 function applyStudio(settings: Settings): void {
@@ -125,6 +136,15 @@ function applyAutoFavoriteScene(settings: Settings): void {
   else disableAutoFavoriteScene();
 }
 
+function applySceneFavoriteSync(): void {
+  const scene = matchScenePage(location.href);
+  if (!scene) {
+    stopSceneFavoriteSync();
+    return;
+  }
+  startSceneFavoriteSync(scene.sceneId);
+}
+
 function applyScene(settings: Settings): void {
   if (settings.hideRedundantAttributes) hideRedundantAttributes();
   else showRedundantAttributes();
@@ -146,4 +166,5 @@ function teardownScene(): void {
   showRedundantAttributes();
   hideScenePageStudioSurface();
   hideScenePageStudioLink();
+  stopSceneFavoriteSync();
 }

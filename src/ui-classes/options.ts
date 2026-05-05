@@ -1,5 +1,5 @@
 export const optionsClasses = {
-  page: "min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-6 py-10 font-sans",
+  page: "min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center gap-6 px-6 py-10 font-sans",
   card: "w-full max-w-xl bg-zinc-900 rounded-2xl ring-1 ring-zinc-800 p-6 shadow-xl",
   title: "text-2xl font-semibold tracking-tight",
   description: "mt-2 text-sm text-zinc-400 leading-relaxed",

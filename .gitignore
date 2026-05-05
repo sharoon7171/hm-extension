@@ -9,3 +9,13 @@ dist
 
 # Logs
 *.log
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Firebase
+.firebase
+firebase-debug.log
+firestore-debug.log

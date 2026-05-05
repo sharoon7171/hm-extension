@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>HotMovies Extension — finishing sign-in</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #09090b;
+        color: #f4f4f5;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+      }
+      main {
+        max-width: 28rem;
+        width: 100%;
+        padding: 2rem;
+        background: #18181b;
+        border-radius: 1rem;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+        border: 1px solid #27272a;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+      p {
+        margin: 0.5rem 0 0;
+        color: #a1a1aa;
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+      .ok {
+        color: #34d399;
+      }
+      .err {
+        color: #f87171;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>HotMovies Extension</h1>
+      <p id="status">Finishing sign-in…</p>
+      <p id="hint">Keep this tab open until it confirms you're signed in.</p>
+    </main>
+    <script>
+      (async () => {
+        const status = document.getElementById("status");
+        const hint = document.getElementById("hint");
+        const params = new URLSearchParams(location.search);
+        const extensionId = params.get("ext");
+        const setStatus = (text, className) => {
+          status.textContent = text;
+          status.className = className || "";
+        };
+        if (!extensionId) {
+          setStatus(
+            "This link is missing the extension id. Open the extension and request a new sign-in link.",
+            "err",
+          );
+          hint.textContent = "";
+          return;
+        }
+        if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+          setStatus(
+            "The HotMovies Extension is not installed in this browser. Install it and click the sign-in link from the same browser.",
+            "err",
+          );
+          hint.textContent = "";
+          return;
+        }
+        try {
+          const response = await new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(
+              extensionId,
+              { type: "completeSignIn", url: location.href },
+              (resp) => {
+                const lastError = chrome.runtime.lastError;
+                if (lastError) reject(new Error(lastError.message));
+                else resolve(resp);
+              },
+            );
+          });
+          if (response && response.ok) {
+            setStatus("Signed in! You can close this tab.", "ok");
+            hint.textContent = "Open the HotMovies Extension options to see your favorite scenes.";
+          } else {
+            const reason = response && response.error ? response.error : "Unknown error";
+            throw new Error(reason);
+          }
+        } catch (e) {
+          setStatus("Sign-in failed: " + e.message, "err");
+          hint.textContent = "Open the extension and request a new sign-in link.";
+        }
+      })();
+    </script>
+  </body>
+</html>

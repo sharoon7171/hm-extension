@@ -9,6 +9,7 @@
     "build": "npm run clean && tsc --noEmit && vite build && vite build --config vite.content.config.ts"
   },
   "dependencies": {
+    "firebase": "^12.12.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

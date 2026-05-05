@@ -16,5 +16,19 @@
     }
   ],
   "permissions": ["storage"],
-  "host_permissions": ["https://video.adultempire.com/*"]
+  "host_permissions": [
+    "https://video.adultempire.com/*",
+    "https://*.googleapis.com/*",
+    "https://hotmovies-extension.firebaseapp.com/*",
+    "https://hotmovies-extension.web.app/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://hotmovies-extension.firebaseapp.com/*",
+      "https://hotmovies-extension.web.app/*"
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
 }

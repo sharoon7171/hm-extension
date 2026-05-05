@@ -10,6 +10,7 @@ import {
   switchKnob,
   switchTrack,
 } from "../ui-classes/options";
+import { FirebaseSection } from "./firebase-section";
 
 export function OptionsApp() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -109,6 +110,12 @@ export function OptionsApp() {
     const next = !settings.favoriteButtonHighlight;
     setSettings({ ...settings, favoriteButtonHighlight: next });
     await updateSettings({ favoriteButtonHighlight: next });
+  };
+
+  const toggleHideFavoritedScenes = async () => {
+    const next = !settings.hideFavoritedScenes;
+    setSettings({ ...settings, hideFavoritedScenes: next });
+    await updateSettings({ hideFavoritedScenes: next });
   };
 
   return (
@@ -422,7 +429,32 @@ export function OptionsApp() {
             <span className={switchKnob(settings.favoriteButtonHighlight)} />
           </button>
         </div>
+        <div className={cls.row}>
+          <span className={cls.label}>
+            <span className={cls.labelTitle}>
+              Hide already-favorited scene cards
+            </span>
+            <span className={cls.labelHint}>
+              Remove every clip card whose scene ID is in your cloud-synced
+              favorites &mdash; from the homepage, search, category, star,
+              studio, recently-added, and movie pages alike. Updates instantly
+              when you favorite or unfavorite anywhere on any device. Off by
+              default; sign in below to use it.
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.hideFavoritedScenes}
+            aria-label="Toggle hide already-favorited scene cards"
+            onClick={toggleHideFavoritedScenes}
+            className={switchTrack(settings.hideFavoritedScenes)}
+          >
+            <span className={switchKnob(settings.hideFavoritedScenes)} />
+          </button>
+        </div>
       </div>
+      <FirebaseSection />
     </div>
   );
 }

@@ -4,6 +4,29 @@ export type FetchTextResponse =
   | { ok: true; text: string }
   | { ok: false; error: string };
 
+export type FavoriteSceneAddRequest = {
+  type: "favoriteSceneAdd";
+  sceneId: string;
+  title: string;
+  href: string;
+};
+
+export type FavoriteSceneRemoveRequest = {
+  type: "favoriteSceneRemove";
+  sceneId: string;
+};
+
+export type FavoriteSceneDeleteAllRequest = {
+  type: "favoriteSceneDeleteAll";
+};
+
+export type CompleteSignInRequest = {
+  type: "completeSignIn";
+  url: string;
+};
+
+export type AckResponse = { ok: true } | { ok: false; error: string };
+
 export async function requestText(url: string, signal: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const onAbort = () => reject(new DOMException("aborted", "AbortError"));
