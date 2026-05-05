@@ -2,28 +2,48 @@ import type { Unsubscribe } from "firebase/firestore";
 import { getFirebaseAuth } from "../firebase/auth";
 import { getBackgroundFirestore } from "../firebase/firestore-background";
 import {
-  addFavoriteScene,
-  deleteAllFavoriteScenes,
-  removeFavoriteScene,
-  subscribeFavoriteScenes,
+  addScene,
+  deleteAllScenes,
+  removeScene,
+  subscribeScenes,
   type AddSceneInput,
+  type SceneKind,
 } from "../firebase/scenes";
 import {
-  EMPTY_FAVORITE_SCENES_CACHE,
-  readFavoriteScenesCache,
-  writeFavoriteScenesCache,
-  type CachedFavoriteScene,
-  type FavoriteScenesCache,
+  EMPTY_SCENES_CACHE,
+  readScenesCache,
+  SCENE_CACHE_KINDS,
+  writeScenesCache,
+  type CachedScene,
+  type SceneCacheKind,
+  type ScenesCache,
 } from "../shared/scenes-cache";
 
-let snapshotUnsubscribe: Unsubscribe | null = null;
+type Entry = {
+  cacheKind: SceneCacheKind;
+  collectionKind: SceneKind;
+  inMemory: ScenesCache;
+  unsubscribe: Unsubscribe | null;
+};
+
+const COLLECTION_KIND: Record<SceneCacheKind, SceneKind> = {
+  favorite: "favoriteScenes",
+  hidden: "hiddenScenes",
+};
+
+const entries = new Map<SceneCacheKind, Entry>();
 let authUnsubscribe: (() => void) | null = null;
-let activeUid: string | null = null;
-let inMemory: FavoriteScenesCache = { ...EMPTY_FAVORITE_SCENES_CACHE };
 
 export async function startScenesMirror(): Promise<void> {
   if (authUnsubscribe) return;
-  inMemory = await readFavoriteScenesCache();
+  for (const kind of SCENE_CACHE_KINDS) {
+    entries.set(kind, {
+      cacheKind: kind,
+      collectionKind: COLLECTION_KIND[kind],
+      inMemory: await readScenesCache(kind),
+      unsubscribe: null,
+    });
+  }
   const auth = getFirebaseAuth();
   authUnsubscribe = auth.onAuthStateChanged(user => {
     if (!user) {
@@ -35,114 +55,133 @@ export async function startScenesMirror(): Promise<void> {
 }
 
 async function resetForSignedOut(): Promise<void> {
-  detachSnapshot();
-  activeUid = null;
-  inMemory = { uid: null, scenes: {}, ready: true };
-  await writeFavoriteScenesCache(inMemory);
+  for (const entry of entries.values()) {
+    detachSnapshot(entry);
+    entry.inMemory = { uid: null, scenes: {}, ready: true };
+    await writeScenesCache(entry.cacheKind, entry.inMemory);
+  }
 }
 
 async function attachToUser(uid: string): Promise<void> {
-  if (activeUid === uid && snapshotUnsubscribe) return;
-  detachSnapshot();
-  activeUid = uid;
-  if (inMemory.uid !== uid) {
-    inMemory = { uid, scenes: {}, ready: false };
-    await writeFavoriteScenesCache(inMemory);
-  } else {
-    inMemory = { ...inMemory, ready: false };
-    await writeFavoriteScenesCache(inMemory);
-  }
   const db = getBackgroundFirestore();
-  snapshotUnsubscribe = subscribeFavoriteScenes(
-    db,
-    uid,
-    async scenes => {
-      const next: Record<string, CachedFavoriteScene> = {};
-      for (const scene of scenes) {
-        next[scene.sceneId] = {
-          sceneId: scene.sceneId,
-          title: scene.title,
-          href: scene.href,
-          addedAt: scene.addedAt ? scene.addedAt.getTime() : null,
-        };
-      }
-      inMemory = { uid, scenes: next, ready: true };
-      await writeFavoriteScenesCache(inMemory);
-    },
-    error => {
-      console.warn("[hotmovies-ext] favorite scenes snapshot error", error);
-    },
-  );
-}
-
-function detachSnapshot(): void {
-  if (snapshotUnsubscribe) {
-    snapshotUnsubscribe();
-    snapshotUnsubscribe = null;
+  for (const entry of entries.values()) {
+    if (entry.unsubscribe && entry.inMemory.uid === uid) continue;
+    detachSnapshot(entry);
+    if (entry.inMemory.uid !== uid) {
+      entry.inMemory = { uid, scenes: {}, ready: false };
+    } else {
+      entry.inMemory = { ...entry.inMemory, ready: false };
+    }
+    await writeScenesCache(entry.cacheKind, entry.inMemory);
+    entry.unsubscribe = subscribeScenes(
+      db,
+      uid,
+      entry.collectionKind,
+      async scenes => {
+        const next: Record<string, CachedScene> = {};
+        for (const scene of scenes) {
+          next[scene.sceneId] = {
+            sceneId: scene.sceneId,
+            title: scene.title,
+            href: scene.href,
+            addedAt: scene.addedAt ? scene.addedAt.getTime() : null,
+          };
+        }
+        entry.inMemory = { uid, scenes: next, ready: true };
+        await writeScenesCache(entry.cacheKind, entry.inMemory);
+      },
+      error => {
+        console.warn(
+          `[hotmovies-ext] ${entry.collectionKind} snapshot error`,
+          error,
+        );
+      },
+    );
   }
 }
 
-export async function ensureMirrorReady(): Promise<FavoriteScenesCache> {
-  if (inMemory.ready) return inMemory;
-  inMemory = await readFavoriteScenesCache();
-  return inMemory;
+function detachSnapshot(entry: Entry): void {
+  if (entry.unsubscribe) {
+    entry.unsubscribe();
+    entry.unsubscribe = null;
+  }
 }
 
-export async function addFavoriteSceneIdempotent(
+function entryFor(kind: SceneKind): Entry {
+  const cacheKind: SceneCacheKind = kind === "favoriteScenes" ? "favorite" : "hidden";
+  const entry = entries.get(cacheKind);
+  if (!entry) throw new Error("scenes mirror not started");
+  return entry;
+}
+
+async function ensureReady(entry: Entry): Promise<void> {
+  if (entry.inMemory.ready) return;
+  entry.inMemory = await readScenesCache(entry.cacheKind);
+}
+
+function requireUid(): string {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("not signed in");
+  return user.uid;
+}
+
+export async function addSceneIdempotent(
+  kind: SceneKind,
   scene: AddSceneInput,
 ): Promise<{ written: boolean }> {
-  const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-  if (!user) throw new Error("not signed in");
-  await ensureMirrorReady();
-  const existing = inMemory.scenes[scene.sceneId];
-  if (
+  const uid = requireUid();
+  const entry = entryFor(kind);
+  const otherKind: SceneKind =
+    kind === "favoriteScenes" ? "hiddenScenes" : "favoriteScenes";
+  await ensureReady(entry);
+  const existing = entry.inMemory.scenes[scene.sceneId];
+  const sameDoc =
     existing &&
     existing.title === scene.title &&
-    existing.href === scene.href
-  ) {
-    return { written: false };
-  }
+    existing.href === scene.href;
   const db = getBackgroundFirestore();
-  await addFavoriteScene(db, user.uid, scene);
-  optimisticallyAdd(user.uid, scene);
-  return { written: true };
+  if (!sameDoc) {
+    await addScene(db, uid, kind, scene);
+    optimisticallyAdd(entry, uid, scene);
+  }
+  await removeSceneIdempotent(otherKind, scene.sceneId);
+  return { written: !sameDoc };
 }
 
-export async function removeFavoriteSceneIdempotent(
+export async function removeSceneIdempotent(
+  kind: SceneKind,
   sceneId: string,
 ): Promise<{ written: boolean }> {
-  const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-  if (!user) throw new Error("not signed in");
-  await ensureMirrorReady();
-  if (!inMemory.scenes[sceneId]) {
+  const uid = requireUid();
+  const entry = entryFor(kind);
+  await ensureReady(entry);
+  if (!entry.inMemory.scenes[sceneId]) {
     return { written: false };
   }
   const db = getBackgroundFirestore();
-  await removeFavoriteScene(db, user.uid, sceneId);
-  optimisticallyRemove(user.uid, sceneId);
+  await removeScene(db, uid, kind, sceneId);
+  optimisticallyRemove(entry, uid, sceneId);
   return { written: true };
 }
 
-export async function deleteAllFavoriteScenesIdempotent(): Promise<{
-  deleted: number;
-}> {
-  const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-  if (!user) throw new Error("not signed in");
+export async function deleteAllScenesIdempotent(
+  kind: SceneKind,
+): Promise<{ deleted: number }> {
+  const uid = requireUid();
+  const entry = entryFor(kind);
   const db = getBackgroundFirestore();
-  const deleted = await deleteAllFavoriteScenes(db, user.uid);
-  inMemory = { uid: user.uid, scenes: {}, ready: true };
-  await writeFavoriteScenesCache(inMemory);
+  const deleted = await deleteAllScenes(db, uid, kind);
+  entry.inMemory = { uid, scenes: {}, ready: true };
+  await writeScenesCache(entry.cacheKind, entry.inMemory);
   return { deleted };
 }
 
-function optimisticallyAdd(uid: string, scene: AddSceneInput): void {
-  const next: FavoriteScenesCache = {
+function optimisticallyAdd(entry: Entry, uid: string, scene: AddSceneInput): void {
+  const next: ScenesCache = {
     uid,
     scenes: {
-      ...inMemory.scenes,
+      ...entry.inMemory.scenes,
       [scene.sceneId]: {
         sceneId: scene.sceneId,
         title: scene.title,
@@ -150,21 +189,23 @@ function optimisticallyAdd(uid: string, scene: AddSceneInput): void {
         addedAt: Date.now(),
       },
     },
-    ready: inMemory.ready,
+    ready: entry.inMemory.ready,
   };
-  inMemory = next;
-  void writeFavoriteScenesCache(next);
+  entry.inMemory = next;
+  void writeScenesCache(entry.cacheKind, next);
 }
 
-function optimisticallyRemove(uid: string, sceneId: string): void {
-  if (!inMemory.scenes[sceneId]) return;
-  const { [sceneId]: _omit, ...rest } = inMemory.scenes;
+function optimisticallyRemove(entry: Entry, uid: string, sceneId: string): void {
+  if (!entry.inMemory.scenes[sceneId]) return;
+  const { [sceneId]: _omit, ...rest } = entry.inMemory.scenes;
   void _omit;
-  const next: FavoriteScenesCache = {
+  const next: ScenesCache = {
     uid,
     scenes: rest,
-    ready: inMemory.ready,
+    ready: entry.inMemory.ready,
   };
-  inMemory = next;
-  void writeFavoriteScenesCache(next);
+  entry.inMemory = next;
+  void writeScenesCache(entry.cacheKind, next);
 }
+
+export { EMPTY_SCENES_CACHE };

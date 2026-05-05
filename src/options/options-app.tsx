@@ -78,8 +78,18 @@ export function OptionsApp() {
 
   const toggleAutoFavoriteScene = async () => {
     const next = !settings.autoFavoriteScene;
-    setSettings({ ...settings, autoFavoriteScene: next });
-    await updateSettings({ autoFavoriteScene: next });
+    const patch: Partial<Settings> = { autoFavoriteScene: next };
+    if (next) patch.autoHideScene = false;
+    setSettings({ ...settings, ...patch });
+    await updateSettings(patch);
+  };
+
+  const toggleAutoHideScene = async () => {
+    const next = !settings.autoHideScene;
+    const patch: Partial<Settings> = { autoHideScene: next };
+    if (next) patch.autoFavoriteScene = false;
+    setSettings({ ...settings, ...patch });
+    await updateSettings(patch);
   };
 
   const toggleAutoFavoriteStar = async () => {
@@ -116,6 +126,12 @@ export function OptionsApp() {
     const next = !settings.hideFavoritedScenes;
     setSettings({ ...settings, hideFavoritedScenes: next });
     await updateSettings({ hideFavoritedScenes: next });
+  };
+
+  const toggleHideCustomScenes = async () => {
+    const next = !settings.hideCustomScenes;
+    setSettings({ ...settings, hideCustomScenes: next });
+    await updateSettings({ hideCustomScenes: next });
   };
 
   return (
@@ -326,6 +342,28 @@ export function OptionsApp() {
         </div>
         <div className={cls.row}>
           <span className={cls.label}>
+            <span className={cls.labelTitle}>Auto-hide scenes</span>
+            <span className={cls.labelHint}>
+              When you open any clip page, save it to your cloud-synced
+              hidden list (only if not already hidden). Combined with the
+              site-wide hide toggle, every visited scene disappears from
+              grids the moment you open it. Off by default &mdash; modifies
+              your cloud library.
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.autoHideScene}
+            aria-label="Toggle auto-hide scenes"
+            onClick={toggleAutoHideScene}
+            className={switchTrack(settings.autoHideScene)}
+          >
+            <span className={switchKnob(settings.autoHideScene)} />
+          </button>
+        </div>
+        <div className={cls.row}>
+          <span className={cls.label}>
             <span className={cls.labelTitle}>Auto-favorite stars</span>
             <span className={cls.labelHint}>
               When you open any pornstar page, click the heart for you (only
@@ -451,6 +489,30 @@ export function OptionsApp() {
             className={switchTrack(settings.hideFavoritedScenes)}
           >
             <span className={switchKnob(settings.hideFavoritedScenes)} />
+          </button>
+        </div>
+        <div className={cls.row}>
+          <span className={cls.label}>
+            <span className={cls.labelTitle}>
+              Hide custom-hidden scene cards
+            </span>
+            <span className={cls.labelHint}>
+              Add a Hide / Unhide pill on every clip page next to the heart.
+              Hidden scenes are saved to a separate cloud collection (with
+              title and link) and disappear from every grid, search result,
+              and movie page across the site &mdash; in real time on every
+              device. On by default.
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.hideCustomScenes}
+            aria-label="Toggle hide custom-hidden scene cards"
+            onClick={toggleHideCustomScenes}
+            className={switchTrack(settings.hideCustomScenes)}
+          >
+            <span className={switchKnob(settings.hideCustomScenes)} />
           </button>
         </div>
       </div>

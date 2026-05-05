@@ -1,17 +1,51 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
+import type { SceneKind } from "../firebase/scenes";
 import { requestSignInLink, signOut, watchAuthState } from "../firebase/auth";
-import type { AckResponse, FavoriteSceneDeleteAllRequest } from "../shared/messages";
+import type { AckResponse, SceneDeleteAllRequest } from "../shared/messages";
 import {
-  EMPTY_FAVORITE_SCENES_CACHE,
-  readFavoriteScenesCache,
+  EMPTY_SCENES_CACHE,
+  readScenesCache,
   sortedScenes,
-  watchFavoriteScenesCache,
-  type FavoriteScenesCache,
+  watchScenesCache,
+  type SceneCacheKind,
+  type ScenesCache,
 } from "../shared/scenes-cache";
 import { optionsClasses as cls } from "../ui-classes/options";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type ListSpec = {
+  cacheKind: SceneCacheKind;
+  collectionKind: SceneKind;
+  title: string;
+  description: string;
+  emptyMessage: string;
+  accent: "emerald" | "rose";
+};
+
+const LISTS: ListSpec[] = [
+  {
+    cacheKind: "favorite",
+    collectionKind: "favoriteScenes",
+    title: "Favorite scenes (cloud sync)",
+    description:
+      "Scenes you favorite from the heart anywhere on hotmovies.com. The list streams from the local cache; the background updates it live whenever any device favorites or unfavorites a scene.",
+    emptyMessage:
+      "No favorited scenes yet. Open any clip page and tap the heart — it will appear here in real time.",
+    accent: "emerald",
+  },
+  {
+    cacheKind: "hidden",
+    collectionKind: "hiddenScenes",
+    title: "Hidden scenes (cloud sync)",
+    description:
+      "Scenes you've hidden using the Hide / Unhide pill on a clip page. They are kept out of every grid, search result, and movie page across the site whenever the matching toggle is on.",
+    emptyMessage:
+      "No hidden scenes yet. Open any clip page and tap Hide — it will appear here and disappear from grids in real time.",
+    accent: "rose",
+  },
+];
 
 export function FirebaseSection() {
   const [authReady, setAuthReady] = useState(false);
@@ -28,13 +62,22 @@ export function FirebaseSection() {
   if (!authReady) {
     return (
       <div className={cls.card}>
-        <h2 className={cls.title}>Favorite scenes (cloud sync)</h2>
+        <h2 className={cls.title}>Cloud sync</h2>
         <p className={cls.description}>Loading account…</p>
       </div>
     );
   }
 
-  return user ? <SignedInPanel user={user} /> : <SignInPanel />;
+  if (!user) return <SignInPanel />;
+
+  return (
+    <>
+      <SignedInHeader user={user} />
+      {LISTS.map(spec => (
+        <ScenesListPanel key={spec.cacheKind} user={user} spec={spec} />
+      ))}
+    </>
+  );
 }
 
 function SignInPanel() {
@@ -61,12 +104,12 @@ function SignInPanel() {
 
   return (
     <div className={cls.card}>
-      <h2 className={cls.title}>Favorite scenes (cloud sync)</h2>
+      <h2 className={cls.title}>Cloud sync</h2>
       <p className={cls.description}>
-        Sign in with a passwordless email link to keep your favorited scenes
-        in sync across devices. The extension reads from a local cache that
-        the background service worker keeps fresh in real time, so this page
-        never queries Firestore directly.
+        Sign in with a passwordless email link to keep your favorited and
+        hidden scenes in sync across devices. The extension reads from a
+        local cache that the background service worker keeps fresh in real
+        time, so this page never queries Firestore directly.
       </p>
       <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
@@ -99,52 +142,19 @@ function SignInPanel() {
   );
 }
 
-function SignedInPanel({ user }: { user: User }) {
-  const [cache, setCache] = useState<FavoriteScenesCache>(EMPTY_FAVORITE_SCENES_CACHE);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void readFavoriteScenesCache().then(setCache);
-    return watchFavoriteScenesCache(setCache);
-  }, []);
-
-  const scenes = useMemo(() => sortedScenes(cache), [cache]);
-  const matchesUser = cache.uid === user.uid;
-  const showLoading = !cache.ready || !matchesUser;
-
-  const onDeleteAll = async () => {
-    if (scenes.length === 0) return;
-    const confirmed = window.confirm(
-      `Delete all ${scenes.length} favorited scenes from your cloud library? This cannot be undone.`,
-    );
-    if (!confirmed) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      const message: FavoriteSceneDeleteAllRequest = { type: "favoriteSceneDeleteAll" };
-      const response = await sendMessage(message);
-      if (!response.ok) throw new Error(response.error);
-    } catch (err) {
-      setDeleteError((err as Error).message);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
+function SignedInHeader({ user }: { user: User }) {
   const onSignOut = async () => {
     await signOut();
   };
-
   return (
     <div className={cls.card}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className={cls.title}>Favorite scenes (cloud sync)</h2>
+          <h2 className={cls.title}>Cloud sync</h2>
           <p className={cls.description}>
             Signed in as <span className="text-zinc-100">{user.email}</span>.
-            This list streams from the local cache; the background updates it
-            live whenever any device changes a favorite.
+            Favorites and hidden scenes are saved separately and stream live
+            from the local cache.
           </p>
         </div>
         <button
@@ -155,23 +165,71 @@ function SignedInPanel({ user }: { user: User }) {
           Sign out
         </button>
       </div>
+    </div>
+  );
+}
+
+function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
+  const [cache, setCache] = useState<ScenesCache>(EMPTY_SCENES_CACHE);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void readScenesCache(spec.cacheKind).then(setCache);
+    return watchScenesCache(spec.cacheKind, setCache);
+  }, [spec.cacheKind]);
+
+  const scenes = useMemo(() => sortedScenes(cache), [cache]);
+  const matchesUser = cache.uid === user.uid;
+  const showLoading = !cache.ready || !matchesUser;
+
+  const onDeleteAll = async () => {
+    if (scenes.length === 0) return;
+    const confirmed = window.confirm(
+      `Delete all ${scenes.length} ${spec.cacheKind === "favorite" ? "favorited" : "hidden"} scenes from your cloud library? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const message: SceneDeleteAllRequest = {
+        type: "sceneDeleteAll",
+        kind: spec.collectionKind,
+      };
+      const response = await sendMessage(message);
+      if (!response.ok) throw new Error(response.error);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const accentBg = spec.accent === "emerald" ? "bg-emerald-500" : "bg-red-500";
+  const accentHover = spec.accent === "emerald" ? "hover:bg-emerald-400" : "hover:bg-red-400";
+  const accentText = spec.accent === "emerald" ? "hover:text-emerald-400" : "hover:text-red-400";
+
+  return (
+    <div className={cls.card}>
+      <h2 className={cls.title}>{spec.title}</h2>
+      <p className={cls.description}>{spec.description}</p>
       <div className="mt-6 flex items-center justify-between">
         <div className="text-sm text-zinc-400">
           {showLoading
             ? "Loading…"
-            : `${scenes.length} scene${scenes.length === 1 ? "" : "s"} favorited`}
+            : `${scenes.length} scene${scenes.length === 1 ? "" : "s"} saved`}
         </div>
         <button
           type="button"
           onClick={onDeleteAll}
-          disabled={deleting || showLoading || scenes.length === 0}
-          className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-400 disabled:bg-zinc-700 disabled:text-zinc-400"
+          disabled={busy || showLoading || scenes.length === 0}
+          className={`rounded-md ${accentBg} px-3 py-1.5 text-xs font-semibold text-white transition ${accentHover} disabled:bg-zinc-700 disabled:text-zinc-400`}
         >
-          {deleting ? "Deleting…" : "Delete all"}
+          {busy ? "Deleting…" : "Delete all"}
         </button>
       </div>
-      {deleteError ? (
-        <p className="mt-3 text-sm text-red-400">Delete failed: {deleteError}</p>
+      {error ? (
+        <p className="mt-3 text-sm text-red-400">Delete failed: {error}</p>
       ) : null}
       {!showLoading && scenes.length > 0 ? (
         <ul className="mt-4 max-h-96 divide-y divide-zinc-800 overflow-y-auto rounded-md ring-1 ring-zinc-800">
@@ -184,7 +242,7 @@ function SignedInPanel({ user }: { user: User }) {
                 href={scene.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="truncate text-sm text-zinc-100 hover:text-emerald-400"
+                className={`truncate text-sm text-zinc-100 ${accentText}`}
                 title={scene.title}
               >
                 {scene.title || `Scene ${scene.sceneId}`}
@@ -203,16 +261,13 @@ function SignedInPanel({ user }: { user: User }) {
         </ul>
       ) : null}
       {!showLoading && scenes.length === 0 ? (
-        <p className="mt-4 text-sm italic text-zinc-500">
-          No favorited scenes yet. Open any clip page on hotmovies.com and tap
-          the heart — it will appear here in real time.
-        </p>
+        <p className="mt-4 text-sm italic text-zinc-500">{spec.emptyMessage}</p>
       ) : null}
     </div>
   );
 }
 
-function sendMessage(message: FavoriteSceneDeleteAllRequest): Promise<AckResponse> {
+function sendMessage(message: SceneDeleteAllRequest): Promise<AckResponse> {
   return new Promise(resolve => {
     chrome.runtime.sendMessage(message, (response: AckResponse | undefined) => {
       if (chrome.runtime.lastError) {

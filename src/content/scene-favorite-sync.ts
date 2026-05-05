@@ -1,7 +1,4 @@
-import type {
-  FavoriteSceneAddRequest,
-  FavoriteSceneRemoveRequest,
-} from "../shared/messages";
+import type { SceneAddRequest, SceneRemoveRequest } from "../shared/messages";
 
 let waitObserver: MutationObserver | null = null;
 let buttonObserver: MutationObserver | null = null;
@@ -37,8 +34,9 @@ function readCanonicalHref(): string {
 }
 
 function sendAdd(sceneId: string): void {
-  const message: FavoriteSceneAddRequest = {
-    type: "favoriteSceneAdd",
+  const message: SceneAddRequest = {
+    type: "sceneAdd",
+    kind: "favoriteScenes",
     sceneId,
     title: readSceneTitle(),
     href: readCanonicalHref(),
@@ -47,8 +45,9 @@ function sendAdd(sceneId: string): void {
 }
 
 function sendRemove(sceneId: string): void {
-  const message: FavoriteSceneRemoveRequest = {
-    type: "favoriteSceneRemove",
+  const message: SceneRemoveRequest = {
+    type: "sceneRemove",
+    kind: "favoriteScenes",
     sceneId,
   };
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);

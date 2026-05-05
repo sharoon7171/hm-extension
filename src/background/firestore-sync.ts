@@ -1,55 +1,53 @@
 import type {
   AckResponse,
-  FavoriteSceneAddRequest,
-  FavoriteSceneDeleteAllRequest,
-  FavoriteSceneRemoveRequest,
+  SceneAddRequest,
+  SceneDeleteAllRequest,
+  SceneRemoveRequest,
 } from "../shared/messages";
 import {
-  addFavoriteSceneIdempotent,
-  deleteAllFavoriteScenesIdempotent,
-  removeFavoriteSceneIdempotent,
+  addSceneIdempotent,
+  deleteAllScenesIdempotent,
+  removeSceneIdempotent,
 } from "./scenes-mirror";
 
-type FavoriteMessage =
-  | FavoriteSceneAddRequest
-  | FavoriteSceneRemoveRequest
-  | FavoriteSceneDeleteAllRequest;
+type SceneMessage = SceneAddRequest | SceneRemoveRequest | SceneDeleteAllRequest;
 
-function isFavoriteMessage(value: unknown): value is FavoriteMessage {
+function isSceneMessage(value: unknown): value is SceneMessage {
   if (!value || typeof value !== "object") return false;
-  const type = (value as { type?: unknown }).type;
+  const message = value as { type?: unknown; kind?: unknown };
+  if (message.kind !== "favoriteScenes" && message.kind !== "hiddenScenes") {
+    return false;
+  }
   return (
-    type === "favoriteSceneAdd" ||
-    type === "favoriteSceneRemove" ||
-    type === "favoriteSceneDeleteAll"
+    message.type === "sceneAdd" ||
+    message.type === "sceneRemove" ||
+    message.type === "sceneDeleteAll"
   );
 }
 
 export function registerFirestoreSync(): void {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!isFavoriteMessage(message)) return false;
-    void handleFavoriteMessage(message).then(sendResponse);
+    if (!isSceneMessage(message)) return false;
+    void handleSceneMessage(message).then(sendResponse);
     return true;
   });
 }
 
-async function handleFavoriteMessage(
-  message: FavoriteMessage,
-): Promise<AckResponse> {
+async function handleSceneMessage(message: SceneMessage): Promise<AckResponse> {
   try {
-    if (message.type === "favoriteSceneAdd") {
-      await addFavoriteSceneIdempotent({
+    if (message.type === "sceneAdd") {
+      await addSceneIdempotent(message.kind, {
         sceneId: message.sceneId,
         title: message.title,
         href: message.href,
       });
       return { ok: true };
     }
-    if (message.type === "favoriteSceneRemove") {
-      await removeFavoriteSceneIdempotent(message.sceneId);
+    if (message.type === "sceneRemove") {
+      await removeSceneIdempotent(message.kind, message.sceneId);
       return { ok: true };
     }
-    await deleteAllFavoriteScenesIdempotent();
+    await deleteAllScenesIdempotent(message.kind);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: (error as Error).message };

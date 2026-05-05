@@ -1,41 +1,81 @@
 import {
-  readFavoriteScenesCache,
-  watchFavoriteScenesCache,
-  type FavoriteScenesCache,
+  readScenesCache,
+  watchScenesCache,
+  type SceneCacheKind,
+  type ScenesCache,
 } from "../shared/scenes-cache";
 
-const HIDE_ATTR = "data-hotmovies-hide-favorited";
-const STYLE_ID = "hotmovies-ext-hide-favorited-style";
+const HIDE_ATTR = "data-hotmovies-hide-card";
+const STYLE_ID = "hotmovies-ext-hide-card-style";
 const COLUMN_RE = /\bcol(?:-(?:xs|sm|md|lg|xl|xxl))?-\d+\b/;
 const SCENE_HREF_RE = /\/adult-clips\/(\d+)/;
 
-let hiddenIds: Set<string> = new Set();
-let storageUnsubscribe: (() => void) | null = null;
+const ids: Record<SceneCacheKind, Set<string>> = {
+  favorite: new Set(),
+  hidden: new Set(),
+};
+
+const enabled: Record<SceneCacheKind, boolean> = {
+  favorite: false,
+  hidden: false,
+};
+
+const cacheUnsubscribe: Partial<Record<SceneCacheKind, () => void>> = {};
 let domObserver: MutationObserver | null = null;
 let scheduled = false;
+let started = false;
 
-export function startHideFavoritedScenes(): void {
-  if (storageUnsubscribe) return;
-  injectStyle();
-  storageUnsubscribe = watchFavoriteScenesCache(applyCache);
-  void readFavoriteScenesCache().then(applyCache);
-  attachDomObserver();
+export function setHideCardsConfig(config: { favorite: boolean; hidden: boolean }): void {
+  enabled.favorite = config.favorite;
+  enabled.hidden = config.hidden;
+  if (!enabled.favorite && !enabled.hidden) {
+    teardown();
+    return;
+  }
+  ensureStarted();
+  syncSubscription("favorite", config.favorite);
+  syncSubscription("hidden", config.hidden);
+  refreshAllCards();
 }
 
-export function stopHideFavoritedScenes(): void {
-  storageUnsubscribe?.();
-  storageUnsubscribe = null;
+function teardown(): void {
+  if (!started) return;
+  started = false;
+  for (const kind of ["favorite", "hidden"] as const) {
+    cacheUnsubscribe[kind]?.();
+    cacheUnsubscribe[kind] = undefined;
+    ids[kind] = new Set();
+  }
   domObserver?.disconnect();
   domObserver = null;
-  hiddenIds = new Set();
   document.getElementById(STYLE_ID)?.remove();
   document
     .querySelectorAll<HTMLElement>(`[${HIDE_ATTR}="true"]`)
     .forEach(el => el.removeAttribute(HIDE_ATTR));
 }
 
-function applyCache(cache: FavoriteScenesCache): void {
-  hiddenIds = new Set(Object.keys(cache.scenes));
+function ensureStarted(): void {
+  if (started) return;
+  started = true;
+  injectStyle();
+  attachDomObserver();
+}
+
+function syncSubscription(kind: SceneCacheKind, on: boolean): void {
+  if (on && !cacheUnsubscribe[kind]) {
+    cacheUnsubscribe[kind] = watchScenesCache(kind, cache => applyCache(kind, cache));
+    void readScenesCache(kind).then(cache => applyCache(kind, cache));
+    return;
+  }
+  if (!on && cacheUnsubscribe[kind]) {
+    cacheUnsubscribe[kind]?.();
+    cacheUnsubscribe[kind] = undefined;
+    ids[kind] = new Set();
+  }
+}
+
+function applyCache(kind: SceneCacheKind, cache: ScenesCache): void {
+  ids[kind] = new Set(Object.keys(cache.scenes));
   refreshAllCards();
 }
 
@@ -63,19 +103,26 @@ function scheduleRefresh(): void {
   });
 }
 
+function shouldHide(id: string): boolean {
+  if (enabled.favorite && ids.favorite.has(id)) return true;
+  if (enabled.hidden && ids.hidden.has(id)) return true;
+  return false;
+}
+
 function refreshAllCards(): void {
+  if (!started) return;
   const gridCards = document.querySelectorAll<HTMLElement>("[data-scene-id]");
   for (const el of gridCards) {
     const id = el.dataset.sceneId;
     if (!id) continue;
     const root = closestColumn(el) ?? el;
-    applyHide(root, hiddenIds.has(id));
+    applyHide(root, shouldHide(id));
   }
   const movieScenes = document.querySelectorAll<HTMLElement>(".movie__scenes__scene");
   for (const el of movieScenes) {
     const id = sceneIdFromMovieScene(el);
     if (!id) continue;
-    applyHide(el, hiddenIds.has(id));
+    applyHide(el, shouldHide(id));
   }
 }
 

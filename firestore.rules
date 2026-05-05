@@ -2,8 +2,11 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/favoriteScenes/{sceneId} {
-      allow read, list, create, update, delete: if request.auth != null && request.auth.uid == uid;
+    match /users/{uid}/{collection}/{sceneId} {
+      allow read, list, create, update, delete:
+        if request.auth != null
+        && request.auth.uid == uid
+        && (collection == "favoriteScenes" || collection == "hiddenScenes");
     }
     match /{document=**} {
       allow read, write: if false;

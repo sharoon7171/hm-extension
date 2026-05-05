@@ -1,30 +1,54 @@
-export type CachedFavoriteScene = {
+export type SceneCacheKind = "favorite" | "hidden";
+
+export const SCENE_CACHE_KINDS: readonly SceneCacheKind[] = [
+  "favorite",
+  "hidden",
+] as const;
+
+export type CachedScene = {
   sceneId: string;
   title: string;
   href: string;
   addedAt: number | null;
 };
 
-export type FavoriteScenesCache = {
+export type ScenesCache = {
   uid: string | null;
-  scenes: Record<string, CachedFavoriteScene>;
+  scenes: Record<string, CachedScene>;
   ready: boolean;
 };
 
-export const FAVORITE_SCENES_CACHE_KEY = "favoriteScenesCache";
+const STORAGE_KEYS: Record<SceneCacheKind, string> = {
+  favorite: "favoriteScenesCache",
+  hidden: "hiddenScenesCache",
+};
 
-export const EMPTY_FAVORITE_SCENES_CACHE: FavoriteScenesCache = {
+export const EMPTY_SCENES_CACHE: ScenesCache = {
   uid: null,
   scenes: {},
   ready: false,
 };
 
-function normalize(value: unknown): FavoriteScenesCache {
-  if (!value || typeof value !== "object") return EMPTY_FAVORITE_SCENES_CACHE;
-  const raw = value as Partial<FavoriteScenesCache>;
+export function storageKey(kind: SceneCacheKind): string {
+  return STORAGE_KEYS[kind];
+}
+
+export function isSceneCacheKey(key: string): key is string {
+  return key === STORAGE_KEYS.favorite || key === STORAGE_KEYS.hidden;
+}
+
+export function kindFromStorageKey(key: string): SceneCacheKind | null {
+  if (key === STORAGE_KEYS.favorite) return "favorite";
+  if (key === STORAGE_KEYS.hidden) return "hidden";
+  return null;
+}
+
+function normalize(value: unknown): ScenesCache {
+  if (!value || typeof value !== "object") return EMPTY_SCENES_CACHE;
+  const raw = value as Partial<ScenesCache>;
   const scenes =
     raw.scenes && typeof raw.scenes === "object" && !Array.isArray(raw.scenes)
-      ? (raw.scenes as Record<string, CachedFavoriteScene>)
+      ? (raw.scenes as Record<string, CachedScene>)
       : {};
   return {
     uid: typeof raw.uid === "string" ? raw.uid : null,
@@ -33,33 +57,38 @@ function normalize(value: unknown): FavoriteScenesCache {
   };
 }
 
-export async function readFavoriteScenesCache(): Promise<FavoriteScenesCache> {
-  const got = await chrome.storage.local.get(FAVORITE_SCENES_CACHE_KEY);
-  return normalize(got[FAVORITE_SCENES_CACHE_KEY]);
+export async function readScenesCache(kind: SceneCacheKind): Promise<ScenesCache> {
+  const key = storageKey(kind);
+  const got = await chrome.storage.local.get(key);
+  return normalize(got[key]);
 }
 
-export async function writeFavoriteScenesCache(
-  next: FavoriteScenesCache,
+export async function writeScenesCache(
+  kind: SceneCacheKind,
+  next: ScenesCache,
 ): Promise<void> {
-  await chrome.storage.local.set({ [FAVORITE_SCENES_CACHE_KEY]: next });
+  const key = storageKey(kind);
+  await chrome.storage.local.set({ [key]: next });
 }
 
-export function watchFavoriteScenesCache(
-  onChange: (cache: FavoriteScenesCache) => void,
+export function watchScenesCache(
+  kind: SceneCacheKind,
+  onChange: (cache: ScenesCache) => void,
 ): () => void {
+  const key = storageKey(kind);
   const listener = (
-    changes: { [key: string]: chrome.storage.StorageChange },
+    changes: { [k: string]: chrome.storage.StorageChange },
     area: chrome.storage.AreaName,
   ) => {
     if (area !== "local") return;
-    if (!(FAVORITE_SCENES_CACHE_KEY in changes)) return;
-    onChange(normalize(changes[FAVORITE_SCENES_CACHE_KEY].newValue));
+    if (!(key in changes)) return;
+    onChange(normalize(changes[key].newValue));
   };
   chrome.storage.onChanged.addListener(listener);
   return () => chrome.storage.onChanged.removeListener(listener);
 }
 
-export function sortedScenes(cache: FavoriteScenesCache): CachedFavoriteScene[] {
+export function sortedScenes(cache: ScenesCache): CachedScene[] {
   return Object.values(cache.scenes).sort((a, b) => {
     const ax = a.addedAt ?? 0;
     const bx = b.addedAt ?? 0;

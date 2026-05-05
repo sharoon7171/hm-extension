@@ -4,6 +4,10 @@ import {
   enableAutoFavoriteScene,
 } from "./auto-favorite-scene";
 import {
+  disableAutoHideScene,
+  enableAutoHideScene,
+} from "./auto-hide-scene";
+import {
   disableAutoFavoriteStar,
   enableAutoFavoriteStar,
 } from "./auto-favorite-star";
@@ -17,10 +21,7 @@ import {
   showFavoriteButtonHighlight,
 } from "./favorite-button-highlight";
 import { hideFullWidthPlayer, showFullWidthPlayer } from "./full-width-player";
-import {
-  startHideFavoritedScenes,
-  stopHideFavoritedScenes,
-} from "./hide-favorite-scene-cards";
+import { setHideCardsConfig } from "./hide-scene-cards";
 import { hideRedundantAttributes, showRedundantAttributes } from "./redundant-attributes";
 import { hideSceneScreenshots, showSceneScreenshots } from "./scene-screenshots";
 import {
@@ -35,6 +36,10 @@ import {
   startSceneFavoriteSync,
   stopSceneFavoriteSync,
 } from "./scene-favorite-sync";
+import {
+  startSceneHideButton,
+  stopSceneHideButton,
+} from "./scene-page-hide-button";
 import { hideSiteBeacon, showSiteBeacon } from "./site-beacon";
 import {
   hideFooterMain,
@@ -61,7 +66,9 @@ async function run(): Promise<void> {
   applyStudio(settings);
   applyStar(settings);
   applyAutoFavoriteScene(settings);
+  applyAutoHideScene(settings);
   applySceneFavoriteSync();
+  applySceneHideButton();
   if (!matchScenePage(location.href)) {
     teardownScene();
     return;
@@ -95,8 +102,10 @@ function applyGlobal(settings: Settings): void {
   else showFooterSecondary();
   if (settings.favoriteButtonHighlight) showFavoriteButtonHighlight();
   else hideFavoriteButtonHighlight();
-  if (settings.hideFavoritedScenes) startHideFavoritedScenes();
-  else stopHideFavoritedScenes();
+  setHideCardsConfig({
+    favorite: settings.hideFavoritedScenes,
+    hidden: settings.hideCustomScenes,
+  });
 }
 
 function applyStudio(settings: Settings): void {
@@ -136,6 +145,16 @@ function applyAutoFavoriteScene(settings: Settings): void {
   else disableAutoFavoriteScene();
 }
 
+function applyAutoHideScene(settings: Settings): void {
+  const scene = matchScenePage(location.href);
+  if (!scene) {
+    disableAutoHideScene();
+    return;
+  }
+  if (settings.autoHideScene) enableAutoHideScene(scene.sceneId);
+  else disableAutoHideScene();
+}
+
 function applySceneFavoriteSync(): void {
   const scene = matchScenePage(location.href);
   if (!scene) {
@@ -143,6 +162,15 @@ function applySceneFavoriteSync(): void {
     return;
   }
   startSceneFavoriteSync(scene.sceneId);
+}
+
+function applySceneHideButton(): void {
+  const scene = matchScenePage(location.href);
+  if (!scene) {
+    stopSceneHideButton();
+    return;
+  }
+  startSceneHideButton(scene.sceneId);
 }
 
 function applyScene(settings: Settings): void {
@@ -167,4 +195,5 @@ function teardownScene(): void {
   hideScenePageStudioSurface();
   hideScenePageStudioLink();
   stopSceneFavoriteSync();
+  stopSceneHideButton();
 }

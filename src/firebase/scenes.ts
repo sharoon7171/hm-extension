@@ -16,7 +16,14 @@ import {
 
 const SCENES_BATCH_SIZE = 400;
 
-export type FavoriteScene = {
+export type SceneKind = "favoriteScenes" | "hiddenScenes";
+
+export const SCENE_KINDS: readonly SceneKind[] = [
+  "favoriteScenes",
+  "hiddenScenes",
+] as const;
+
+export type SavedScene = {
   sceneId: string;
   title: string;
   href: string;
@@ -29,21 +36,22 @@ export type AddSceneInput = {
   href: string;
 };
 
-function scenesCollection(db: Firestore, uid: string) {
-  return collection(db, "users", uid, "favoriteScenes");
+function scenesCollection(db: Firestore, uid: string, kind: SceneKind) {
+  return collection(db, "users", uid, kind);
 }
 
-function sceneDoc(db: Firestore, uid: string, sceneId: string) {
-  return doc(db, "users", uid, "favoriteScenes", sceneId);
+function sceneDoc(db: Firestore, uid: string, kind: SceneKind, sceneId: string) {
+  return doc(db, "users", uid, kind, sceneId);
 }
 
-export async function addFavoriteScene(
+export async function addScene(
   db: Firestore,
   uid: string,
+  kind: SceneKind,
   scene: AddSceneInput,
 ): Promise<void> {
   await setDoc(
-    sceneDoc(db, uid, scene.sceneId),
+    sceneDoc(db, uid, kind, scene.sceneId),
     {
       sceneId: scene.sceneId,
       title: scene.title,
@@ -54,25 +62,27 @@ export async function addFavoriteScene(
   );
 }
 
-export async function removeFavoriteScene(
+export async function removeScene(
   db: Firestore,
   uid: string,
+  kind: SceneKind,
   sceneId: string,
 ): Promise<void> {
-  await deleteDoc(sceneDoc(db, uid, sceneId));
+  await deleteDoc(sceneDoc(db, uid, kind, sceneId));
 }
 
-export function subscribeFavoriteScenes(
+export function subscribeScenes(
   db: Firestore,
   uid: string,
-  onChange: (scenes: FavoriteScene[]) => void,
+  kind: SceneKind,
+  onChange: (scenes: SavedScene[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
-  const q = query(scenesCollection(db, uid), orderBy("addedAt", "desc"));
+  const q = query(scenesCollection(db, uid, kind), orderBy("addedAt", "desc"));
   return onSnapshot(
     q,
     snapshot => {
-      const scenes: FavoriteScene[] = snapshot.docs.map(docSnap => {
+      const scenes: SavedScene[] = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
         const addedAt = data.addedAt instanceof Timestamp ? data.addedAt.toDate() : null;
         return {
@@ -88,13 +98,14 @@ export function subscribeFavoriteScenes(
   );
 }
 
-export async function deleteAllFavoriteScenes(
+export async function deleteAllScenes(
   db: Firestore,
   uid: string,
+  kind: SceneKind,
 ): Promise<number> {
   let deleted = 0;
   while (true) {
-    const snap = await getDocs(scenesCollection(db, uid));
+    const snap = await getDocs(scenesCollection(db, uid, kind));
     if (snap.empty) break;
     const docs = snap.docs.slice(0, SCENES_BATCH_SIZE);
     const batch = writeBatch(db);

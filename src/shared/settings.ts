@@ -15,6 +15,8 @@ export type Settings = {
   autoRedirectStarToClips: boolean;
   favoriteButtonHighlight: boolean;
   hideFavoritedScenes: boolean;
+  hideCustomScenes: boolean;
+  autoHideScene: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -31,9 +33,11 @@ const DEFAULTS: Settings = {
   autoFavoriteStar: false,
   autoFavoriteStudio: false,
   hideStarBio: true,
-  autoRedirectStarToClips: false,
+  autoRedirectStarToClips: true,
   favoriteButtonHighlight: true,
   hideFavoritedScenes: false,
+  hideCustomScenes: false,
+  autoHideScene: false,
 };
 
 const KEYS = Object.keys(DEFAULTS) as (keyof Settings)[];

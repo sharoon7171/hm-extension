@@ -1,23 +1,28 @@
+import type { SceneKind } from "../firebase/scenes";
+
 export type FetchTextRequest = { type: "fetchText"; url: string };
 
 export type FetchTextResponse =
   | { ok: true; text: string }
   | { ok: false; error: string };
 
-export type FavoriteSceneAddRequest = {
-  type: "favoriteSceneAdd";
+export type SceneAddRequest = {
+  type: "sceneAdd";
+  kind: SceneKind;
   sceneId: string;
   title: string;
   href: string;
 };
 
-export type FavoriteSceneRemoveRequest = {
-  type: "favoriteSceneRemove";
+export type SceneRemoveRequest = {
+  type: "sceneRemove";
+  kind: SceneKind;
   sceneId: string;
 };
 
-export type FavoriteSceneDeleteAllRequest = {
-  type: "favoriteSceneDeleteAll";
+export type SceneDeleteAllRequest = {
+  type: "sceneDeleteAll";
+  kind: SceneKind;
 };
 
 export type CompleteSignInRequest = {
