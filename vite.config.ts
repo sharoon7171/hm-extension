@@ -30,6 +30,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: false,
+    cssCodeSplit: false,
     minify: "terser",
     terserOptions: {
       compress: { drop_console: true },
@@ -37,12 +38,15 @@ export default defineConfig({
     rollupOptions: {
       input: {
         options: path.resolve(__dirname, "options.html"),
-        background: path.resolve(__dirname, "src/background/index.ts"),
       },
       output: {
+        codeSplitting: false,
         entryFileNames: "[name].js",
         chunkFileNames: "[name].js",
-        assetFileNames: "[name][extname]",
+        assetFileNames: (asset) => {
+          const name = asset.names[0] ?? "asset";
+          return name.endsWith(".css") ? "options.css" : "[name][extname]";
+        },
       },
     },
   },

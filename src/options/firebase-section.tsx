@@ -11,7 +11,14 @@ import {
   type SceneCacheKind,
   type ScenesCache,
 } from "../shared/scenes-cache";
-import { optionsClasses as cls } from "../ui-classes/options";
+import {
+  buttonClasses,
+  cardClasses,
+  inputClasses,
+  listClasses,
+  noticeClasses,
+} from "../ui-classes/options";
+import { SectionCard } from "./components/section-card";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,31 +26,28 @@ type ListSpec = {
   cacheKind: SceneCacheKind;
   collectionKind: SceneKind;
   title: string;
-  description: string;
+  subtitle: string;
   emptyMessage: string;
-  accent: "emerald" | "rose";
 };
 
 const LISTS: ListSpec[] = [
   {
     cacheKind: "favorite",
     collectionKind: "favoriteScenes",
-    title: "Favorite scenes (cloud sync)",
-    description:
-      "Scenes you favorite from the heart anywhere on hotmovies.com. The list streams from the local cache; the background updates it live whenever any device favorites or unfavorites a scene.",
+    title: "Favorited scenes",
+    subtitle:
+      "Streams from the local cache; the background updates it whenever any device favorites or unfavorites a scene.",
     emptyMessage:
-      "No favorited scenes yet. Open any clip page and tap the heart — it will appear here in real time.",
-    accent: "emerald",
+      "No favorited scenes yet. Open any clip page and tap the heart.",
   },
   {
     cacheKind: "hidden",
     collectionKind: "hiddenScenes",
-    title: "Hidden scenes (cloud sync)",
-    description:
-      "Scenes you've hidden using the Hide / Unhide pill on a clip page. They are kept out of every grid, search result, and movie page across the site whenever the matching toggle is on.",
+    title: "Hidden scenes",
+    subtitle:
+      "Scenes you hid using the Hide / Unhide button on a clip page. Removed from grids when the matching toggle is on.",
     emptyMessage:
-      "No hidden scenes yet. Open any clip page and tap Hide — it will appear here and disappear from grids in real time.",
-    accent: "rose",
+      "No hidden scenes yet. Open any clip page and tap Hide.",
   },
 ];
 
@@ -61,22 +65,23 @@ export function FirebaseSection() {
 
   if (!authReady) {
     return (
-      <div className={cls.card}>
-        <h2 className={cls.title}>Cloud sync</h2>
-        <p className={cls.description}>Loading account…</p>
-      </div>
+      <SectionCard title="Cloud sync" subtitle="Loading account…">
+        <div />
+      </SectionCard>
     );
   }
 
   if (!user) return <SignInPanel />;
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <SignedInHeader user={user} />
-      {LISTS.map(spec => (
-        <ScenesListPanel key={spec.cacheKind} user={user} spec={spec} />
-      ))}
-    </>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        {LISTS.map(spec => (
+          <ScenesListPanel key={spec.cacheKind} user={user} spec={spec} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -103,42 +108,40 @@ function SignInPanel() {
   };
 
   return (
-    <div className={cls.card}>
-      <h2 className={cls.title}>Cloud sync</h2>
-      <p className={cls.description}>
-        Sign in with a passwordless email link to keep your favorited and
-        hidden scenes in sync across devices. The extension reads from a
-        local cache that the background service worker keeps fresh in real
-        time, so this page never queries Firestore directly.
-      </p>
-      <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-zinc-100">Email address</span>
+    <SectionCard
+      title="Cloud sync"
+      subtitle="Sign in with a passwordless email link to keep favorited and hidden scenes in sync across devices."
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-3 pt-3">
+        <label className="flex flex-col">
+          <span className={inputClasses.label}>Email address</span>
           <input
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="you@example.com"
             disabled={status !== "idle"}
-            className="rounded-md bg-zinc-800 px-3 py-2 text-zinc-100 ring-1 ring-zinc-700 focus:outline-none focus:ring-emerald-500"
+            className={inputClasses.root}
           />
         </label>
-        <button
-          type="submit"
-          disabled={status !== "idle"}
-          className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-400"
-        >
-          {status === "sending" ? "Sending link…" : "Send sign-in link"}
-        </button>
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        <div>
+          <button
+            type="submit"
+            disabled={status !== "idle"}
+            className={buttonClasses.primary}
+          >
+            {status === "sending" ? "Sending link…" : "Send sign-in link"}
+          </button>
+        </div>
+        {error ? <p className={noticeClasses.error}>{error}</p> : null}
         {status === "sent" ? (
-          <p className="text-sm text-emerald-400">
+          <p className={noticeClasses.success}>
             Check {email} for a sign-in link. Click the link in any browser —
-            this page will sign you in automatically once you do.
+            this page signs you in automatically once you do.
           </p>
         ) : null}
       </form>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -147,25 +150,24 @@ function SignedInHeader({ user }: { user: User }) {
     await signOut();
   };
   return (
-    <div className={cls.card}>
+    <section className={cardClasses.root}>
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className={cls.title}>Cloud sync</h2>
-          <p className={cls.description}>
-            Signed in as <span className="text-zinc-100">{user.email}</span>.
-            Favorites and hidden scenes are saved separately and stream live
-            from the local cache.
+        <div className="flex flex-col">
+          <h2 className={cardClasses.title}>Cloud sync</h2>
+          <p className={cardClasses.subtitle}>
+            Signed in as <span className="text-neutral-900">{user.email}</span>.
+            Favorites and hidden scenes stream live from the local cache.
           </p>
         </div>
         <button
           type="button"
           onClick={onSignOut}
-          className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-200 ring-1 ring-zinc-700 transition hover:bg-zinc-700"
+          className={buttonClasses.secondary}
         >
           Sign out
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -205,44 +207,35 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
     }
   };
 
-  const accentBg = spec.accent === "emerald" ? "bg-emerald-500" : "bg-red-500";
-  const accentHover = spec.accent === "emerald" ? "hover:bg-emerald-400" : "hover:bg-red-400";
-  const accentText = spec.accent === "emerald" ? "hover:text-emerald-400" : "hover:text-red-400";
-
   return (
-    <div className={cls.card}>
-      <h2 className={cls.title}>{spec.title}</h2>
-      <p className={cls.description}>{spec.description}</p>
-      <div className="mt-6 flex items-center justify-between">
-        <div className="text-sm text-zinc-400">
+    <SectionCard title={spec.title} subtitle={spec.subtitle}>
+      <div className="flex items-center justify-between pt-3">
+        <span className={listClasses.count}>
           {showLoading
             ? "Loading…"
-            : `${scenes.length} scene${scenes.length === 1 ? "" : "s"} saved`}
-        </div>
+            : `${scenes.length} scene${scenes.length === 1 ? "" : "s"}`}
+        </span>
         <button
           type="button"
           onClick={onDeleteAll}
           disabled={busy || showLoading || scenes.length === 0}
-          className={`rounded-md ${accentBg} px-3 py-1.5 text-xs font-semibold text-white transition ${accentHover} disabled:bg-zinc-700 disabled:text-zinc-400`}
+          className={buttonClasses.danger}
         >
           {busy ? "Deleting…" : "Delete all"}
         </button>
       </div>
       {error ? (
-        <p className="mt-3 text-sm text-red-400">Delete failed: {error}</p>
+        <p className={`${noticeClasses.error} mt-2`}>Delete failed: {error}</p>
       ) : null}
       {!showLoading && scenes.length > 0 ? (
-        <ul className="mt-4 max-h-96 divide-y divide-zinc-800 overflow-y-auto rounded-md ring-1 ring-zinc-800">
+        <ul className="mt-3 max-h-80 overflow-y-auto rounded-lg ring-1 ring-neutral-200 px-3 bg-neutral-50">
           {scenes.map(scene => (
-            <li
-              key={scene.sceneId}
-              className="flex items-center justify-between gap-3 px-3 py-2"
-            >
+            <li key={scene.sceneId} className={listClasses.row}>
               <a
                 href={scene.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`truncate text-sm text-zinc-100 ${accentText}`}
+                className={listClasses.link}
                 title={scene.title}
               >
                 {scene.title || `Scene ${scene.sceneId}`}
@@ -250,7 +243,7 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
               {scene.addedAt ? (
                 <time
                   dateTime={new Date(scene.addedAt).toISOString()}
-                  className="shrink-0 text-xs text-zinc-500"
+                  className={listClasses.meta}
                   title={new Date(scene.addedAt).toLocaleString()}
                 >
                   {new Date(scene.addedAt).toLocaleDateString()}
@@ -261,9 +254,9 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
         </ul>
       ) : null}
       {!showLoading && scenes.length === 0 ? (
-        <p className="mt-4 text-sm italic text-zinc-500">{spec.emptyMessage}</p>
+        <p className={listClasses.empty}>{spec.emptyMessage}</p>
       ) : null}
-    </div>
+    </SectionCard>
   );
 }
 
@@ -271,7 +264,10 @@ function sendMessage(message: SceneDeleteAllRequest): Promise<AckResponse> {
   return new Promise(resolve => {
     chrome.runtime.sendMessage(message, (response: AckResponse | undefined) => {
       if (chrome.runtime.lastError) {
-        resolve({ ok: false, error: chrome.runtime.lastError.message ?? "background unavailable" });
+        resolve({
+          ok: false,
+          error: chrome.runtime.lastError.message ?? "background unavailable",
+        });
         return;
       }
       if (!response) {

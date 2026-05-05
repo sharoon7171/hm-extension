@@ -19,7 +19,7 @@ export default defineConfig({
     },
     rollupOptions: {
       input: {
-        content: path.resolve(__dirname, "src/content/index.ts"),
+        background: path.resolve(__dirname, "src/background/index.ts"),
       },
       output: {
         codeSplitting: false,
