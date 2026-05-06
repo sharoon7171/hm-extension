@@ -1,6 +1,10 @@
 {
-  "name": "hotmovies-extension",
+  "name": "site-customizationzz",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sharoon7171/site-customizationzz.git"
+  },
   "version": "1.0.0",
   "type": "module",
   "scripts": {
