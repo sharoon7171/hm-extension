@@ -2,7 +2,7 @@ export type Settings = {
   screenshotsEnabled: boolean;
   fullWidthPlayer: boolean;
   hideRedundantAttributes: boolean;
-  hideSiteBeacon: boolean;
+  hidePromoBanners: boolean;
   hideFooterMain: boolean;
   hideFooterSecondary: boolean;
   studioBrowseOnStudioPage: boolean;
@@ -23,7 +23,7 @@ const DEFAULTS: Settings = {
   screenshotsEnabled: true,
   fullWidthPlayer: true,
   hideRedundantAttributes: true,
-  hideSiteBeacon: true,
+  hidePromoBanners: true,
   hideFooterMain: true,
   hideFooterSecondary: true,
   studioBrowseOnStudioPage: true,

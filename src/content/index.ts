@@ -21,6 +21,7 @@ import {
   showFavoriteButtonHighlight,
 } from "./favorite-button-highlight";
 import { hideFullWidthPlayer, showFullWidthPlayer } from "./full-width-player";
+import { hidePromoBanners, showPromoBanners } from "./hide-promo-banners";
 import { setHideCardsConfig } from "./hide-scene-cards";
 import { hideRedundantAttributes, showRedundantAttributes } from "./redundant-attributes";
 import { hideSceneScreenshots, showSceneScreenshots } from "./scene-screenshots";
@@ -40,7 +41,6 @@ import {
   startSceneHideButton,
   stopSceneHideButton,
 } from "./scene-page-hide-button";
-import { hideSiteBeacon, showSiteBeacon } from "./site-beacon";
 import {
   hideFooterMain,
   hideFooterSecondary,
@@ -94,8 +94,8 @@ function watchForPlayer(): void {
 }
 
 function applyGlobal(settings: Settings): void {
-  if (settings.hideSiteBeacon) hideSiteBeacon();
-  else showSiteBeacon();
+  if (settings.hidePromoBanners) hidePromoBanners();
+  else showPromoBanners();
   if (settings.hideFooterMain) hideFooterMain();
   else showFooterMain();
   if (settings.hideFooterSecondary) hideFooterSecondary();

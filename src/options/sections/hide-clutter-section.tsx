@@ -17,11 +17,11 @@ export function HideClutterSection({
       subtitle="Strip the chrome HotMovies adds around its content."
     >
       <ToggleRow
-        title="Hide promo banner"
-        hint='Remove the "Select Unlimited Members…" promo strip that appears on every page.'
-        checked={settings.hideSiteBeacon}
-        onToggle={() => update({ hideSiteBeacon: !settings.hideSiteBeacon })}
-        ariaLabel="Toggle hide promo banner"
+        title="Hide promotional banners"
+        hint='Remove every promo block on HotMovies: the top "Select Unlimited" strip, hero sale banners, mid-page cross-promos, the "Save Money" tower, and the "On Sale!" links on movie and clip titles.'
+        checked={settings.hidePromoBanners}
+        onToggle={() => update({ hidePromoBanners: !settings.hidePromoBanners })}
+        ariaLabel="Toggle hide promotional banners"
       />
       <ToggleRow
         title="Hide footer links"
