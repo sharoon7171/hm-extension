@@ -17,6 +17,7 @@ export type Settings = {
   hideFavoritedScenes: boolean;
   hideCustomScenes: boolean;
   autoHideScene: boolean;
+  customPlayer: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -38,6 +39,7 @@ const DEFAULTS: Settings = {
   hideFavoritedScenes: false,
   hideCustomScenes: false,
   autoHideScene: false,
+  customPlayer: false,
 };
 
 const KEYS = Object.keys(DEFAULTS) as (keyof Settings)[];

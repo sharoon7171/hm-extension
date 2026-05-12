@@ -1,6 +1,10 @@
-import { clickFavoriteButton } from "./favorite-button-click";
 import type { SceneAddRequest } from "../shared/messages";
-import { readScenesCache } from "../shared/scenes-cache";
+import {
+  applyOptimisticAdd,
+  applyOptimisticRemove,
+  readScenesCache,
+} from "../shared/scenes-cache";
+import { clickFavoriteButton } from "./favorite-button-click";
 
 let observer: MutationObserver | null = null;
 let fired = false;
@@ -25,12 +29,17 @@ async function hideOnce(sceneId: string, btn: HTMLElement): Promise<void> {
   const cache = await readScenesCache("hidden");
   if (sceneId in cache.scenes) return;
   if (btn.classList.contains("active")) clickFavoriteButton(btn);
-  const message: SceneAddRequest = {
-    type: "sceneAdd",
-    kind: "hiddenScenes",
+  const scene = {
     sceneId,
     title: readSceneTitle(),
     href: readCanonicalHref(),
+  };
+  void applyOptimisticAdd("hidden", scene);
+  void applyOptimisticRemove("favorite", sceneId);
+  const message: SceneAddRequest = {
+    type: "sceneAdd",
+    kind: "hiddenScenes",
+    ...scene,
   };
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }

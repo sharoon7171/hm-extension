@@ -1,7 +1,9 @@
+import { CUSTOM_PLAYER_HOST_ID } from "./dom-markers";
+
 const STYLE_ID = "hotmovies-full-width-player-style";
 const PLAYER_CLASS = "hotmovies-full-width-player";
 const SIDEBAR_CLASS = "hotmovies-full-width-player-sidebar-hidden";
-const PLAYER_SELECTOR = 'iframe[src*="adultempire.com/gw/player"]';
+const PLAYER_SELECTOR = `iframe[src*="adultempire.com/gw/player"], #${CUSTOM_PLAYER_HOST_ID}`;
 const ASPECT_W = 16;
 const ASPECT_H = 9;
 const BOTTOM_BUFFER_PX = 30;

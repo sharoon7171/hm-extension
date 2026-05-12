@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "HotMovies Extension",
+  "name": "HM-Extension",
   "version": "1.0.0",
   "action": {},
   "options_page": "options.html",
@@ -15,9 +15,11 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": ["storage"],
+  "permissions": ["storage", "declarativeNetRequest", "cookies"],
   "host_permissions": [
+    "https://www.hotmovies.com/*",
     "https://video.adultempire.com/*",
+    "https://player.digiflix.video/*",
     "https://*.googleapis.com/*",
     "https://hotmovies-extension.firebaseapp.com/*",
     "https://hotmovies-extension.web.app/*"
@@ -26,6 +28,15 @@
     "matches": [
       "https://hotmovies-extension.firebaseapp.com/*",
       "https://hotmovies-extension.web.app/*"
+    ]
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "block-rules",
+        "enabled": true,
+        "path": "block-rules.json"
+      }
     ]
   },
   "content_security_policy": {

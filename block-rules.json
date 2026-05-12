@@ -1,0 +1,151 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||plausible.ravanallc.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||adultempire.com/bn/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["image", "script", "sub_frame"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||hotmovies.com/Scripts/*_metrics.js",
+      "resourceTypes": ["script"]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||hotmovies.com/blog/posts",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||google-analytics.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "image", "sub_frame"]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||analytics.google.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "sub_frame"]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googletagmanager.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "sub_frame"]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googletagservices.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "sub_frame"]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||doubleclick.net/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "image", "sub_frame"]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||facebook.net/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "sub_frame"]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||facebook.com/tr/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "image", "sub_frame"]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||hotjar.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "sub_frame", "websocket"]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||clarity.ms/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "image", "sub_frame"]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||snap.licdn.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "image", "sub_frame"]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||bat.bing.com/",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["script", "xmlhttprequest", "ping", "image", "sub_frame"]
+    }
+  }
+]

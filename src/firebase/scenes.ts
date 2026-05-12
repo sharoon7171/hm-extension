@@ -18,12 +18,7 @@ const SCENES_BATCH_SIZE = 400;
 
 export type SceneKind = "favoriteScenes" | "hiddenScenes";
 
-export const SCENE_KINDS: readonly SceneKind[] = [
-  "favoriteScenes",
-  "hiddenScenes",
-] as const;
-
-export type SavedScene = {
+type SavedScene = {
   sceneId: string;
   title: string;
   href: string;

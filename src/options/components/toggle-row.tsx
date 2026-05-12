@@ -5,7 +5,7 @@ import {
   switchTrack,
 } from "../../ui-classes/options";
 
-export type ToggleRowProps = {
+type ToggleRowProps = {
   title: string;
   hint?: ReactNode;
   checked: boolean;

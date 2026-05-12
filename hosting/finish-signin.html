@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>HotMovies Extension — finishing sign-in</title>
+    <title>HM-Extension — finishing sign-in</title>
     <style>
       :root {
         color-scheme: dark;
@@ -54,7 +54,7 @@
   </head>
   <body>
     <main>
-      <h1>HotMovies Extension</h1>
+      <h1>HM-Extension</h1>
       <p id="status">Finishing sign-in…</p>
       <p id="hint">Keep this tab open until it confirms you're signed in.</p>
     </main>
@@ -70,7 +70,7 @@
         };
         if (!extensionId) {
           setStatus(
-            "This link is missing the extension id. Open the extension and request a new sign-in link.",
+            "This link is missing the extension id. Open HM-Extension and request a new sign-in link.",
             "err",
           );
           hint.textContent = "";
@@ -78,7 +78,7 @@
         }
         if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
           setStatus(
-            "The HotMovies Extension is not installed in this browser. Install it and click the sign-in link from the same browser.",
+            "HM-Extension is not installed in this browser. Install it and click the sign-in link from the same browser.",
             "err",
           );
           hint.textContent = "";
@@ -98,14 +98,14 @@
           });
           if (response && response.ok) {
             setStatus("Signed in! You can close this tab.", "ok");
-            hint.textContent = "Open the HotMovies Extension options to see your favorite scenes.";
+            hint.textContent = "Open HM-Extension options to see your favorite scenes.";
           } else {
             const reason = response && response.error ? response.error : "Unknown error";
             throw new Error(reason);
           }
         } catch (e) {
           setStatus("Sign-in failed: " + e.message, "err");
-          hint.textContent = "Open the extension and request a new sign-in link.";
+          hint.textContent = "Open HM-Extension and request a new sign-in link.";
         }
       })();
     </script>

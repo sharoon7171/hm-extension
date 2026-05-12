@@ -28,25 +28,49 @@ function isSceneMessage(value: unknown): value is SceneMessage {
 export function registerFirestoreSync(): void {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!isSceneMessage(message)) return false;
-    void handleSceneMessage(message).then(sendResponse);
+    if (message.type === "sceneAdd") {
+      sendResponse({ ok: true } satisfies AckResponse);
+      void runAdd(message);
+      return false;
+    }
+    if (message.type === "sceneRemove") {
+      sendResponse({ ok: true } satisfies AckResponse);
+      void runRemove(message);
+      return false;
+    }
+    void runDeleteAll(message).then(sendResponse);
     return true;
   });
 }
 
-async function handleSceneMessage(message: SceneMessage): Promise<AckResponse> {
+async function runAdd(message: SceneAddRequest): Promise<void> {
   try {
-    if (message.type === "sceneAdd") {
-      await addSceneIdempotent(message.kind, {
-        sceneId: message.sceneId,
-        title: message.title,
-        href: message.href,
-      });
-      return { ok: true };
-    }
-    if (message.type === "sceneRemove") {
-      await removeSceneIdempotent(message.kind, message.sceneId);
-      return { ok: true };
-    }
+    await addSceneIdempotent(message.kind, {
+      sceneId: message.sceneId,
+      title: message.title,
+      href: message.href,
+    });
+  } catch (error) {
+    console.warn(
+      `[hotmovies-ext] sceneAdd ${message.kind}/${message.sceneId} failed`,
+      error,
+    );
+  }
+}
+
+async function runRemove(message: SceneRemoveRequest): Promise<void> {
+  try {
+    await removeSceneIdempotent(message.kind, message.sceneId);
+  } catch (error) {
+    console.warn(
+      `[hotmovies-ext] sceneRemove ${message.kind}/${message.sceneId} failed`,
+      error,
+    );
+  }
+}
+
+async function runDeleteAll(message: SceneDeleteAllRequest): Promise<AckResponse> {
+  try {
     await deleteAllScenesIdempotent(message.kind);
     return { ok: true };
   } catch (error) {

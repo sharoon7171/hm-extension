@@ -1,3 +1,4 @@
 @import "tailwindcss";
 
 @source "./content/**/*.ts";
+@source "./ui-classes/player.ts";

@@ -1,3 +1,4 @@
+import { readScenesCache } from "../shared/scenes-cache";
 import { clickFavoriteButton } from "./favorite-button-click";
 
 let observer: MutationObserver | null = null;
@@ -11,13 +12,19 @@ function isFavorited(btn: HTMLElement): boolean {
   return icon.classList.contains("fa-heart");
 }
 
+async function favoriteOnce(sceneId: string, btn: HTMLElement): Promise<void> {
+  const cache = await readScenesCache("favorite");
+  if (sceneId in cache.scenes) return;
+  if (!isFavorited(btn)) clickFavoriteButton(btn);
+}
+
 function tryFire(sceneId: string): boolean {
   if (fired) return true;
   const selector = `a[data-ta="favorite"][data-tl="scene"][data-tid="${CSS.escape(sceneId)}"]`;
   const btn = document.querySelector<HTMLElement>(selector);
   if (!btn) return false;
-  if (!isFavorited(btn)) clickFavoriteButton(btn);
   fired = true;
+  void favoriteOnce(sceneId, btn);
   return true;
 }
 
@@ -40,4 +47,5 @@ export function enableAutoFavoriteScene(sceneId: string): void {
 export function disableAutoFavoriteScene(): void {
   observer?.disconnect();
   observer = null;
+  fired = false;
 }

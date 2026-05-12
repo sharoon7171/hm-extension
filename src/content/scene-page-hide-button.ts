@@ -1,6 +1,8 @@
 import { clickFavoriteButton } from "./favorite-button-click";
 import type { SceneAddRequest, SceneRemoveRequest } from "../shared/messages";
 import {
+  applyOptimisticAdd,
+  applyOptimisticRemove,
   readScenesCache,
   watchScenesCache,
   type ScenesCache,
@@ -16,10 +18,6 @@ const STYLE_RULES = `
     cursor: pointer;
     user-select: none;
   }
-  #${WRAPPER_ID}[disabled] {
-    opacity: 0.6;
-    cursor: progress;
-  }
   #${WRAPPER_ID} #${ICON_ID} {
     transition: color 120ms ease;
   }
@@ -33,14 +31,17 @@ let cacheUnsubscribe: (() => void) | null = null;
 let activeSceneId: string | null = null;
 let favoriteAnchor: HTMLElement | null = null;
 let isHidden = false;
-let pending = false;
+let mirroredHidden: boolean | null = null;
+let lifecycleInstalled = false;
 
 export function startSceneHideButton(sceneId: string): void {
   stopSceneHideButton();
   activeSceneId = sceneId;
+  mirroredHidden = null;
   injectStyle();
   void readScenesCache("hidden").then(applyCache);
   cacheUnsubscribe = watchScenesCache("hidden", applyCache);
+  ensureLifecycleListeners();
   ensureButton();
 }
 
@@ -54,7 +55,8 @@ export function stopSceneHideButton(): void {
   activeSceneId = null;
   favoriteAnchor = null;
   isHidden = false;
-  pending = false;
+  mirroredHidden = null;
+  removeLifecycleListeners();
 }
 
 function injectStyle(): void {
@@ -69,6 +71,71 @@ function applyCache(cache: ScenesCache): void {
   if (!activeSceneId) return;
   isHidden = activeSceneId in cache.scenes;
   refreshButton();
+  flushHiddenMirrorFromPage();
+}
+
+function sendHiddenAdd(sceneId: string): void {
+  const scene = {
+    sceneId,
+    title: readSceneTitle(),
+    href: readCanonicalHref(),
+  };
+  void applyOptimisticAdd("hidden", scene);
+  void applyOptimisticRemove("favorite", sceneId);
+  const message: SceneAddRequest = {
+    type: "sceneAdd",
+    kind: "hiddenScenes",
+    ...scene,
+  };
+  chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
+}
+
+function sendHiddenRemove(sceneId: string): void {
+  void applyOptimisticRemove("hidden", sceneId);
+  const message: SceneRemoveRequest = {
+    type: "sceneRemove",
+    kind: "hiddenScenes",
+    sceneId,
+  };
+  chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
+}
+
+function flushHiddenMirrorFromPage(): void {
+  if (!activeSceneId) return;
+  const sceneId = activeSceneId;
+  const want = isHidden;
+  if (mirroredHidden === null) {
+    mirroredHidden = want;
+    if (want) sendHiddenAdd(sceneId);
+    return;
+  }
+  if (mirroredHidden === want) return;
+  mirroredHidden = want;
+  if (want) sendHiddenAdd(sceneId);
+  else sendHiddenRemove(sceneId);
+}
+
+function onHiddenLifecycleFlush(): void {
+  flushHiddenMirrorFromPage();
+}
+
+function ensureLifecycleListeners(): void {
+  if (lifecycleInstalled) return;
+  lifecycleInstalled = true;
+  window.addEventListener("pagehide", onHiddenLifecycleFlush, true);
+  document.addEventListener("visibilitychange", onHiddenVisibility, true);
+}
+
+function removeLifecycleListeners(): void {
+  if (!lifecycleInstalled) return;
+  lifecycleInstalled = false;
+  window.removeEventListener("pagehide", onHiddenLifecycleFlush, true);
+  document.removeEventListener("visibilitychange", onHiddenVisibility, true);
+}
+
+function onHiddenVisibility(): void {
+  if (document.visibilityState !== "hidden") return;
+  onHiddenLifecycleFlush();
 }
 
 function ensureButton(): void {
@@ -163,15 +230,8 @@ function refreshButton(): void {
   if (!wrapper || !icon || !label) return;
   wrapper.dataset.state = isHidden ? "hidden" : "visible";
   wrapper.setAttribute("aria-pressed", isHidden ? "true" : "false");
-  wrapper.toggleAttribute("disabled", pending);
   icon.className = `fa ${isHidden ? "fa-eye" : "fa-eye-slash"}`;
-  label.textContent = pending
-    ? isHidden
-      ? "Unhiding…"
-      : "Hiding…"
-    : isHidden
-      ? "Unhide"
-      : "Hide";
+  label.textContent = isHidden ? "Unhide" : "Hide";
 }
 
 function onKeyDown(event: KeyboardEvent): void {
@@ -180,49 +240,20 @@ function onKeyDown(event: KeyboardEvent): void {
   void onClick(event);
 }
 
-async function onClick(event: Event): Promise<void> {
+function onClick(event: Event): void {
   event.preventDefault();
-  if (!activeSceneId || pending) return;
-  pending = true;
+  if (!activeSceneId) return;
+  const willHide = !isHidden;
+  isHidden = willHide;
   refreshButton();
-  try {
-    if (isHidden) {
-      const message: SceneRemoveRequest = {
-        type: "sceneRemove",
-        kind: "hiddenScenes",
-        sceneId: activeSceneId,
-      };
-      await sendMessage(message);
-    } else {
-      unfavoriteOnSiteIfActive();
-      const message: SceneAddRequest = {
-        type: "sceneAdd",
-        kind: "hiddenScenes",
-        sceneId: activeSceneId,
-        title: readSceneTitle(),
-        href: readCanonicalHref(),
-      };
-      await sendMessage(message);
-    }
-  } finally {
-    pending = false;
-    refreshButton();
-  }
+  if (willHide) unfavoriteOnSiteIfActive();
+  flushHiddenMirrorFromPage();
 }
 
 function unfavoriteOnSiteIfActive(): void {
   if (!favoriteAnchor || !favoriteAnchor.isConnected) return;
   if (!favoriteAnchor.classList.contains("active")) return;
   clickFavoriteButton(favoriteAnchor);
-}
-
-function sendMessage(message: SceneAddRequest | SceneRemoveRequest): Promise<void> {
-  return new Promise(resolve => {
-    chrome.runtime.sendMessage(message, () => {
-      void chrome.runtime.lastError;
-      resolve();
-    });
-  });
 }
 
 function readSceneTitle(): string {

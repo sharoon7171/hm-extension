@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cardClasses } from "../../ui-classes/options";
 
-export type SectionCardProps = {
+type SectionCardProps = {
   title: string;
   subtitle?: string;
   children: ReactNode;

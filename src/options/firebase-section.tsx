@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import type { SceneKind } from "../firebase/scenes";
 import { requestSignInLink, signOut, watchAuthState } from "../firebase/auth";
+import { EXTENSION_DISPLAY_NAME } from "../shared/extension-brand";
 import type { AckResponse, SceneDeleteAllRequest } from "../shared/messages";
 import {
   EMPTY_SCENES_CACHE,
@@ -35,8 +36,7 @@ const LISTS: ListSpec[] = [
     cacheKind: "favorite",
     collectionKind: "favoriteScenes",
     title: "Favorited scenes",
-    subtitle:
-      "Streams from the local cache; the background updates it whenever any device favorites or unfavorites a scene.",
+    subtitle: `Streams from the local cache; ${EXTENSION_DISPLAY_NAME} updates it in the background whenever any device favorites or unfavorites a scene.`,
     emptyMessage:
       "No favorited scenes yet. Open any clip page and tap the heart.",
   },
@@ -44,8 +44,7 @@ const LISTS: ListSpec[] = [
     cacheKind: "hidden",
     collectionKind: "hiddenScenes",
     title: "Hidden scenes",
-    subtitle:
-      "Scenes you hid using the Hide / Unhide button on a clip page. Removed from grids when the matching toggle is on.",
+    subtitle: `Scenes you hid using the Hide / Unhide button on a clip page. ${EXTENSION_DISPLAY_NAME} removes them from grids when the matching toggle is on.`,
     emptyMessage:
       "No hidden scenes yet. Open any clip page and tap Hide.",
   },
@@ -110,7 +109,7 @@ function SignInPanel() {
   return (
     <SectionCard
       title="Cloud sync"
-      subtitle="Sign in with a passwordless email link to keep favorited and hidden scenes in sync across devices."
+      subtitle={`${EXTENSION_DISPLAY_NAME}: sign in with a passwordless email link to keep favorited and hidden scenes in sync across devices.`}
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-3 pt-3">
         <label className="flex flex-col">
@@ -136,8 +135,9 @@ function SignInPanel() {
         {error ? <p className={noticeClasses.error}>{error}</p> : null}
         {status === "sent" ? (
           <p className={noticeClasses.success}>
-            Check {email} for a sign-in link. Click the link in any browser —
-            this page signs you in automatically once you do.
+            Check {email} for a sign-in link. Click the link in any browser —{" "}
+            {EXTENSION_DISPLAY_NAME} finishes signing you in on this page
+            automatically.
           </p>
         ) : null}
       </form>
@@ -156,7 +156,7 @@ function SignedInHeader({ user }: { user: User }) {
           <h2 className={cardClasses.title}>Cloud sync</h2>
           <p className={cardClasses.subtitle}>
             Signed in as <span className="text-neutral-900">{user.email}</span>.
-            Favorites and hidden scenes stream live from the local cache.
+            {` ${EXTENSION_DISPLAY_NAME} streams favorites and hidden scenes live from the local cache.`}
           </p>
         </div>
         <button

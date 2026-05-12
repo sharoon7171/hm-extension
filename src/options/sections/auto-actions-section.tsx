@@ -1,8 +1,9 @@
+import { EXTENSION_DISPLAY_NAME } from "../../shared/extension-brand";
 import type { Settings } from "../../shared/settings";
 import { SectionCard } from "../components/section-card";
 import { ToggleRow } from "../components/toggle-row";
 
-export type AutoActionsSectionProps = {
+type AutoActionsSectionProps = {
   settings: Settings;
   update: (patch: Partial<Settings>) => Promise<void>;
 };
@@ -28,25 +29,25 @@ export function AutoActionsSection({
   return (
     <SectionCard
       title="Auto actions"
-      subtitle="The extension does these for you the moment you open the matching page. Off by default — modifies your account or cloud library."
+      subtitle={`${EXTENSION_DISPLAY_NAME} does these for you the moment you open the matching page. Off by default — modifies your account or cloud library.`}
     >
       <ToggleRow
         title="Auto-favorite scenes"
-        hint="Click the heart on every clip page. Mutually exclusive with auto-hide scenes."
+        hint={`${EXTENSION_DISPLAY_NAME} clicks the heart on every clip page. Mutually exclusive with auto-hide scenes.`}
         checked={settings.autoFavoriteScene}
         onToggle={toggleAutoFavoriteScene}
         ariaLabel="Toggle auto-favorite scenes"
       />
       <ToggleRow
         title="Auto-hide scenes"
-        hint="Add every opened clip to your cloud-synced hidden list. Mutually exclusive with auto-favorite scenes."
+        hint={`${EXTENSION_DISPLAY_NAME} adds every opened clip to your cloud-synced hidden list. Mutually exclusive with auto-favorite scenes.`}
         checked={settings.autoHideScene}
         onToggle={toggleAutoHideScene}
         ariaLabel="Toggle auto-hide scenes"
       />
       <ToggleRow
         title="Auto-favorite stars"
-        hint="Click the heart on every pornstar profile."
+        hint={`${EXTENSION_DISPLAY_NAME} clicks the heart on every pornstar profile.`}
         checked={settings.autoFavoriteStar}
         onToggle={() =>
           update({ autoFavoriteStar: !settings.autoFavoriteStar })
@@ -55,7 +56,7 @@ export function AutoActionsSection({
       />
       <ToggleRow
         title="Auto-favorite studios"
-        hint="Click the heart on every studio page."
+        hint={`${EXTENSION_DISPLAY_NAME} clicks the heart on every studio page.`}
         checked={settings.autoFavoriteStudio}
         onToggle={() =>
           update({ autoFavoriteStudio: !settings.autoFavoriteStudio })
@@ -64,7 +65,7 @@ export function AutoActionsSection({
       />
       <ToggleRow
         title="Skip star bio page"
-        hint="Land on a pornstar profile and jump straight to the Clips tab. Movies, Reviews, and Galleries tabs are left alone."
+        hint={`${EXTENSION_DISPLAY_NAME} lands on a pornstar profile and jumps straight to the Clips tab. Movies, Reviews, and Galleries tabs are left alone.`}
         checked={settings.autoRedirectStarToClips}
         onToggle={() =>
           update({

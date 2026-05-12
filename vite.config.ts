@@ -3,17 +3,21 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
-const copyManifest = (): Plugin => {
-  const source = path.resolve(__dirname, "manifest.json");
-  const target = path.resolve(__dirname, "dist/manifest.json");
+const STATIC_FILES = ["manifest.json", "block-rules.json"] as const;
+
+const copyStaticFiles = (): Plugin => {
+  const pairs = STATIC_FILES.map(name => ({
+    source: path.resolve(__dirname, name),
+    target: path.resolve(__dirname, "dist", name),
+  }));
   return {
-    name: "copy-manifest",
+    name: "copy-static-files",
     apply: "build",
     buildStart() {
-      this.addWatchFile(source);
+      for (const { source } of pairs) this.addWatchFile(source);
     },
     closeBundle() {
-      fs.copyFileSync(source, target);
+      for (const { source, target } of pairs) fs.copyFileSync(source, target);
     },
   };
 };
@@ -21,7 +25,7 @@ const copyManifest = (): Plugin => {
 export default defineConfig({
   base: "./",
   publicDir: false,
-  plugins: [react(), copyManifest()],
+  plugins: [react(), copyStaticFiles()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

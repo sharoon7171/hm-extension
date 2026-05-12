@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EXTENSION_DISPLAY_NAME } from "../shared/extension-brand";
 import {
   getSettings,
   onSettingsChanged,
@@ -32,7 +33,7 @@ export function OptionsApp() {
     <div className={cls.page} style={POPPINS_STYLE}>
       <div className={cls.shell}>
         <header className={cls.banner}>
-          <h1 className={cls.bannerTitle}>HotMovies Extension</h1>
+          <h1 className={cls.bannerTitle}>{EXTENSION_DISPLAY_NAME}</h1>
           <p className={cls.bannerSubtitle}>
             Settings sync across every open tab and every signed-in device.
           </p>

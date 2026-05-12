@@ -29,18 +29,8 @@ export const EMPTY_SCENES_CACHE: ScenesCache = {
   ready: false,
 };
 
-export function storageKey(kind: SceneCacheKind): string {
+function storageKey(kind: SceneCacheKind): string {
   return STORAGE_KEYS[kind];
-}
-
-export function isSceneCacheKey(key: string): key is string {
-  return key === STORAGE_KEYS.favorite || key === STORAGE_KEYS.hidden;
-}
-
-export function kindFromStorageKey(key: string): SceneCacheKind | null {
-  if (key === STORAGE_KEYS.favorite) return "favorite";
-  if (key === STORAGE_KEYS.hidden) return "hidden";
-  return null;
 }
 
 function normalize(value: unknown): ScenesCache {
@@ -71,12 +61,79 @@ export async function writeScenesCache(
   await chrome.storage.local.set({ [key]: next });
 }
 
+type OptimisticAddInput = {
+  sceneId: string;
+  title: string;
+  href: string;
+};
+
+export async function applyOptimisticAdd(
+  kind: SceneCacheKind,
+  scene: OptimisticAddInput,
+): Promise<void> {
+  const current = await readScenesCache(kind);
+  const existing = current.scenes[scene.sceneId];
+  if (
+    existing &&
+    existing.title === scene.title &&
+    existing.href === scene.href
+  ) {
+    return;
+  }
+  const next: ScenesCache = {
+    uid: current.uid,
+    scenes: {
+      ...current.scenes,
+      [scene.sceneId]: {
+        sceneId: scene.sceneId,
+        title: scene.title,
+        href: scene.href,
+        addedAt: existing?.addedAt ?? Date.now(),
+      },
+    },
+    ready: current.ready,
+  };
+  await writeScenesCache(kind, next);
+}
+
+export async function applyOptimisticRemove(
+  kind: SceneCacheKind,
+  sceneId: string,
+): Promise<void> {
+  const current = await readScenesCache(kind);
+  if (!(sceneId in current.scenes)) return;
+  const { [sceneId]: _omit, ...rest } = current.scenes;
+  void _omit;
+  await writeScenesCache(kind, {
+    uid: current.uid,
+    scenes: rest,
+    ready: current.ready,
+  });
+}
+
+export const SCENES_CACHE_BROADCAST_TYPE = "scenesCacheUpdated" as const;
+
+export type ScenesCacheBroadcast = {
+  type: typeof SCENES_CACHE_BROADCAST_TYPE;
+  kind: SceneCacheKind;
+  cache: ScenesCache;
+};
+
+function isScenesCacheBroadcast(value: unknown): value is ScenesCacheBroadcast {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.type === SCENES_CACHE_BROADCAST_TYPE &&
+    (v.kind === "favorite" || v.kind === "hidden")
+  );
+}
+
 export function watchScenesCache(
   kind: SceneCacheKind,
   onChange: (cache: ScenesCache) => void,
 ): () => void {
   const key = storageKey(kind);
-  const listener = (
+  const fromStorage = (
     changes: { [k: string]: chrome.storage.StorageChange },
     area: chrome.storage.AreaName,
   ) => {
@@ -84,8 +141,17 @@ export function watchScenesCache(
     if (!(key in changes)) return;
     onChange(normalize(changes[key].newValue));
   };
-  chrome.storage.onChanged.addListener(listener);
-  return () => chrome.storage.onChanged.removeListener(listener);
+  const fromMessage = (message: unknown) => {
+    if (!isScenesCacheBroadcast(message)) return;
+    if (message.kind !== kind) return;
+    onChange(normalize(message.cache));
+  };
+  chrome.storage.onChanged.addListener(fromStorage);
+  chrome.runtime.onMessage.addListener(fromMessage);
+  return () => {
+    chrome.storage.onChanged.removeListener(fromStorage);
+    chrome.runtime.onMessage.removeListener(fromMessage);
+  };
 }
 
 export function sortedScenes(cache: ScenesCache): CachedScene[] {

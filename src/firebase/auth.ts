@@ -41,13 +41,13 @@ export async function requestSignInLink(email: string): Promise<void> {
   await chrome.storage.local.set({ [PENDING_EMAIL_KEY]: email });
 }
 
-export async function readPendingEmail(): Promise<string | null> {
+async function readPendingEmail(): Promise<string | null> {
   const stored = await chrome.storage.local.get(PENDING_EMAIL_KEY);
   const value = stored[PENDING_EMAIL_KEY];
   return typeof value === "string" ? value : null;
 }
 
-export async function clearPendingEmail(): Promise<void> {
+async function clearPendingEmail(): Promise<void> {
   await chrome.storage.local.remove(PENDING_EMAIL_KEY);
 }
 
