@@ -45,6 +45,8 @@ export function createMetricsLoader(
       callbacks: LoaderCallbacks<LoaderContext>,
     ): void {
       const isSegment = context.responseType === SEGMENT_RESPONSE_TYPE;
+      const url = context.url;
+      if (isSegment) tracker.trackUrl(url);
       const wrapped: LoaderCallbacks<LoaderContext> = {
         onSuccess: (
           response: LoaderResponse,
@@ -54,19 +56,28 @@ export function createMetricsLoader(
         ) => {
           if (isSegment) {
             const bytes = stats.loaded || (response.data as ArrayBuffer)?.byteLength || 0;
-            const start = stats.loading.first || stats.loading.start;
-            const end = stats.loading.end || performance.now();
-            if (bytes > 0 && Number.isFinite(start) && Number.isFinite(end) && end > start) {
-              tracker.update(bytes, start, end);
-              tracker.recordFragment(bytes);
-            }
+            if (bytes > 0) tracker.recordFragment(bytes);
+            tracker.noteResourceFinished(url);
+            tracker.untrackUrl(url);
           }
           callbacks.onSuccess(response, stats, ctx, networkDetails);
         },
-        onError: callbacks.onError,
-        onTimeout: callbacks.onTimeout,
-        onAbort: callbacks.onAbort,
-        onProgress: callbacks.onProgress,
+        onError: (error, ctx, networkDetails, stats) => {
+          if (isSegment) tracker.untrackUrl(url);
+          callbacks.onError?.(error, ctx, networkDetails, stats);
+        },
+        onTimeout: (stats, ctx, networkDetails) => {
+          if (isSegment) tracker.untrackUrl(url);
+          callbacks.onTimeout?.(stats, ctx, networkDetails);
+        },
+        onAbort: (stats, ctx, networkDetails) => {
+          if (isSegment) tracker.untrackUrl(url);
+          callbacks.onAbort?.(stats, ctx, networkDetails);
+        },
+        onProgress: (stats, ctx, data, networkDetails) => {
+          if (isSegment) tracker.syncTransfer(url, stats);
+          callbacks.onProgress?.(stats, ctx, data, networkDetails);
+        },
       };
       this.inner.load(context, config, wrapped);
     }

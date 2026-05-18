@@ -4,6 +4,9 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   publicDir: false,
+  define: {
+    "import.meta": "{}",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
@@ -27,9 +30,11 @@ export default defineConfig({
         content: path.resolve(__dirname, "src/content/index.ts"),
       },
       output: {
+        format: "iife",
         entryFileNames: "[name].js",
         chunkFileNames: "[name].js",
         assetFileNames: "[name][extname]",
+        codeSplitting: false,
       },
     },
   },

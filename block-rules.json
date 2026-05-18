@@ -24,8 +24,9 @@
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "urlFilter": "||hotmovies.com/Scripts/*_metrics.js",
-      "resourceTypes": ["script"]
+      "urlFilter": "||hotmovies.com/um^",
+      "initiatorDomains": ["hotmovies.com"],
+      "resourceTypes": ["xmlhttprequest", "ping"]
     }
   },
   {

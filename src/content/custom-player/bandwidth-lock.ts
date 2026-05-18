@@ -5,10 +5,6 @@ type Message = {
   playerId: string;
 };
 
-type BandwidthLockCallbacks = {
-  onLost: () => void;
-};
-
 export type BandwidthLock = {
   claim: () => void;
   release: () => void;
@@ -16,7 +12,7 @@ export type BandwidthLock = {
   destroy: () => void;
 };
 
-export function createBandwidthLock(callbacks: BandwidthLockCallbacks): BandwidthLock {
+export function createBandwidthLock(): BandwidthLock {
   const playerId =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
@@ -31,7 +27,6 @@ export function createBandwidthLock(callbacks: BandwidthLockCallbacks): Bandwidt
       if (data.playerId === playerId) return;
       if (!owner) return;
       owner = false;
-      callbacks.onLost();
     };
   } catch {
     channel = null;

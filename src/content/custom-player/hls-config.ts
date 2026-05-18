@@ -2,7 +2,9 @@ import type Hls from "hls.js";
 
 type HlsConfigInput = NonNullable<ConstructorParameters<typeof Hls>[0]>;
 
-const HUGE = Number.MAX_SAFE_INTEGER;
+export const FORWARD_BUFFER_TARGET_SEC = 45;
+export const FORWARD_BUFFER_CAP_SEC = 120;
+export const PREFETCH_WHEN_AHEAD_BELOW_SEC = 40;
 
 export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   autoStartLoad: false,
@@ -11,12 +13,13 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   capLevelOnFPSDrop: false,
   capLevelToPlayerSize: false,
   initialLiveManifestSize: 1,
-  maxBufferLength: HUGE,
-  maxMaxBufferLength: HUGE,
-  backBufferLength: HUGE,
-  maxBufferSize: HUGE,
+  maxBufferLength: FORWARD_BUFFER_TARGET_SEC,
+  maxMaxBufferLength: FORWARD_BUFFER_CAP_SEC,
+  frontBufferFlushThreshold: Number.POSITIVE_INFINITY,
+  backBufferLength: Number.POSITIVE_INFINITY,
+  maxBufferSize: Number.POSITIVE_INFINITY,
   maxBufferHole: 0.5,
-  highBufferWatchdogPeriod: 2,
+  highBufferWatchdogPeriod: 0.5,
   nudgeOffset: 0.1,
   nudgeMaxRetry: 3,
   maxFragLookUpTolerance: 0.25,
@@ -27,7 +30,7 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   enableSoftwareAES: true,
   startFragPrefetch: true,
   testBandwidth: false,
-  progressive: false,
+  progressive: true,
   lowLatencyMode: false,
   fpsDroppedMonitoringPeriod: 5000,
   fpsDroppedMonitoringThreshold: 0.2,
@@ -43,8 +46,8 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   abrBandWidthFactor: 0.95,
   abrBandWidthUpFactor: 0.7,
   abrMaxWithRealBitrate: false,
-  maxStarvationDelay: 4,
-  maxLoadingDelay: 4,
+  maxStarvationDelay: 0,
+  maxLoadingDelay: 0,
   minAutoBitrate: 0,
   fragLoadPolicy: {
     default: {

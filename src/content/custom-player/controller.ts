@@ -5,6 +5,8 @@ import { buildIcon } from "./icons";
 import { formatBytes, formatBytesPerSecond, formatTimecode } from "./format";
 import { CUSTOM_PLAYER_HLS_CONFIG } from "./hls-config";
 import { createMetricsLoader } from "./metrics-loader";
+import { isPlaybackBuffered } from "./buffer-range";
+import { createPrefetchLoader, type PrefetchLoaderBundle } from "./prefetch-loader";
 import { buildPlayerElement, type PlayerElement } from "./player-element";
 import {
   clampLevelIndex,
@@ -68,8 +70,13 @@ export type PlayerController = {
 export function createPlayerController(): PlayerController {
   const ui = buildPlayerElement();
   const tracker = new SpeedTracker();
+  tracker.setOnChange(bps => {
+    ui.stats.speed.textContent = formatBytesPerSecond(bps);
+  });
   const abort = new AbortController();
   let hls: Hls | null = null;
+  let hlsRef: Hls | null = null;
+  let prefetch: PrefetchLoaderBundle | null = null;
   let menu: QualityMenu | null = null;
   let statsTimer: number | null = null;
   let source: SceneSource | null = null;
@@ -105,11 +112,7 @@ export function createPlayerController(): PlayerController {
     playbackEverStarted = false;
     chipBufferingActive = false;
     ui.prepLabel.textContent = "Opening stream…";
-    lock = createBandwidthLock({
-      onLost: () => {
-        hls?.stopLoad();
-      },
-    });
+    lock = createBandwidthLock();
     syncPrepChip();
     initHls(source.playlistUrl);
     wireControls();
@@ -129,9 +132,12 @@ export function createPlayerController(): PlayerController {
     }
     lock?.destroy();
     lock = null;
+    tracker.destroy();
     if (hls) {
       hls.destroy();
       hls = null;
+      hlsRef = null;
+      prefetch = null;
     }
     ui.root.remove();
   };
@@ -154,10 +160,12 @@ export function createPlayerController(): PlayerController {
       );
       return;
     }
+    prefetch = createPrefetchLoader(() => hlsRef, tracker, createMetricsLoader(tracker));
     hls = new Hls({
       ...CUSTOM_PLAYER_HLS_CONFIG,
-      loader: createMetricsLoader(tracker),
+      loader: prefetch.Loader,
     });
+    hlsRef = hls;
     hls.attachMedia(ui.video);
     hls.on(Hls.Events.MEDIA_ATTACHED, () => {
       hls?.loadSource(playlistUrl);
@@ -280,8 +288,13 @@ export function createPlayerController(): PlayerController {
       const duration = ui.video.duration || source.durationSeconds;
       ui.time.total.textContent = formatTimecode(duration);
     });
-    ui.video.addEventListener("seeked", () => {
-      syncAfterSeek();
+    ui.video.addEventListener("seeking", () => {
+      if (!playbackEverStarted || !hls || !prefetch) return;
+      const t = ui.video.currentTime;
+      if (!isPlaybackBuffered(ui.video, t)) {
+        prefetch.primeAtSeek(hls, t);
+        syncAfterSeek();
+      }
     });
     ui.video.addEventListener("waiting", () => {
       ui.seek.track.dataset.waiting = "true";
@@ -367,6 +380,7 @@ export function createPlayerController(): PlayerController {
     if (!playbackEverStarted) return;
     if (!hls || !lock) return;
     const t = ui.video.currentTime;
+    if (isPlaybackBuffered(ui.video, t)) return;
     if (!lock.isOwner()) {
       lock.claim();
       applyLockedLevel();
@@ -522,7 +536,7 @@ export function createPlayerController(): PlayerController {
   };
 
   const updateStats = (): void => {
-    const bps = tracker.getSmoothedBytesPerSecond();
+    const bps = tracker.getBytesPerSecond();
     ui.stats.speed.textContent = formatBytesPerSecond(bps);
     const ranges = ui.video.buffered;
     let ahead = 0;
