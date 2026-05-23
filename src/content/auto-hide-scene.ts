@@ -4,10 +4,11 @@ import {
   applyOptimisticRemove,
   readScenesCache,
 } from "../shared/scenes-cache";
-import { clickFavoriteButton } from "./favorite-button-click";
 
 let observer: MutationObserver | null = null;
 let fired = false;
+let pendingSceneId: string | null = null;
+let lifecycleInstalled = false;
 
 function favoriteButtonSelector(sceneId: string): string {
   return `a[data-ta="favorite"][data-tl="scene"][data-tid="${CSS.escape(sceneId)}"]`;
@@ -25,10 +26,7 @@ function readCanonicalHref(): string {
   return `${location.origin}${location.pathname}`;
 }
 
-async function hideOnce(sceneId: string, btn: HTMLElement): Promise<void> {
-  const cache = await readScenesCache("hidden");
-  if (sceneId in cache.scenes) return;
-  if (btn.classList.contains("active")) clickFavoriteButton(btn);
+function sendHiddenAdd(sceneId: string): void {
   const scene = {
     sceneId,
     title: readSceneTitle(),
@@ -44,16 +42,52 @@ async function hideOnce(sceneId: string, btn: HTMLElement): Promise<void> {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
+function flushPendingHide(): void {
+  if (!pendingSceneId) return;
+  sendHiddenAdd(pendingSceneId);
+}
+
+function onAutoHideVisibility(): void {
+  if (document.visibilityState !== "hidden") return;
+  flushPendingHide();
+}
+
+function ensureLifecycleListeners(): void {
+  if (lifecycleInstalled) return;
+  lifecycleInstalled = true;
+  window.addEventListener("pagehide", flushPendingHide, true);
+  document.addEventListener("visibilitychange", onAutoHideVisibility, true);
+}
+
+function removeLifecycleListeners(): void {
+  if (!lifecycleInstalled) return;
+  lifecycleInstalled = false;
+  window.removeEventListener("pagehide", flushPendingHide, true);
+  document.removeEventListener("visibilitychange", onAutoHideVisibility, true);
+}
+
+async function hideOnce(sceneId: string): Promise<void> {
+  pendingSceneId = sceneId;
+  const cache = await readScenesCache("hidden");
+  if (sceneId in cache.scenes) {
+    pendingSceneId = null;
+    return;
+  }
+  sendHiddenAdd(sceneId);
+  pendingSceneId = null;
+}
+
 function tryFire(sceneId: string): boolean {
   if (fired) return true;
   const btn = document.querySelector<HTMLElement>(favoriteButtonSelector(sceneId));
   if (!btn) return false;
   fired = true;
-  void hideOnce(sceneId, btn);
+  void hideOnce(sceneId);
   return true;
 }
 
 export function enableAutoHideScene(sceneId: string): void {
+  ensureLifecycleListeners();
   if (tryFire(sceneId)) {
     observer?.disconnect();
     observer = null;
@@ -73,4 +107,6 @@ export function disableAutoHideScene(): void {
   observer?.disconnect();
   observer = null;
   fired = false;
+  pendingSceneId = null;
+  removeLifecycleListeners();
 }

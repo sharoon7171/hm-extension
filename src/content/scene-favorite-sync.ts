@@ -1,16 +1,22 @@
+import { clickFavoriteButton } from "./favorite-button-click";
 import type { SceneAddRequest, SceneRemoveRequest } from "../shared/messages";
 import {
   applyOptimisticAdd,
   applyOptimisticRemove,
   readScenesCache,
+  watchScenesCache,
+  type ScenesCache,
 } from "../shared/scenes-cache";
 
 let waitObserver: MutationObserver | null = null;
 let buttonObserver: MutationObserver | null = null;
+let cacheUnsubscribe: (() => void) | null = null;
 let favoriteSyncAbort: AbortController | null = null;
 let activeSceneId: string | null = null;
 let mirroredFavorite: boolean | null = null;
+let syncingFromCache = false;
 let domFavoritePushRafId: number | null = null;
+let lifecycleInstalled = false;
 
 function buttonSelector(sceneId: string): string {
   return `a[data-ta="favorite"][data-tl="scene"][data-tid="${CSS.escape(sceneId)}"]`;
@@ -66,21 +72,64 @@ function sendRemove(sceneId: string): void {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
+function applyFavoriteCache(cache: ScenesCache): void {
+  if (!activeSceneId) return;
+  const sceneId = activeSceneId;
+  const inCache = sceneId in cache.scenes;
+  const btn = findButton(sceneId);
+  if (!btn) {
+    if (mirroredFavorite === null) mirroredFavorite = inCache;
+    return;
+  }
+  const dom = isFavorited(btn);
+  if (dom === inCache) {
+    mirroredFavorite = dom;
+    return;
+  }
+  if (mirroredFavorite === null) {
+    if (inCache && !dom) {
+      syncingFromCache = true;
+      try {
+        btn.click();
+        mirroredFavorite = true;
+      } finally {
+        syncingFromCache = false;
+      }
+      return;
+    }
+    if (!inCache && dom) {
+      mirroredFavorite = true;
+      sendAdd(sceneId);
+      return;
+    }
+    mirroredFavorite = inCache;
+    return;
+  }
+  syncingFromCache = true;
+  try {
+    if (inCache && !dom) btn.click();
+    else if (!inCache && dom) clickFavoriteButton(btn);
+    mirroredFavorite = inCache;
+  } finally {
+    syncingFromCache = false;
+  }
+}
+
 async function reconcileFavoriteAgainstCache(sceneId: string): Promise<void> {
-  if (activeSceneId !== sceneId) return;
+  if (activeSceneId !== sceneId || syncingFromCache) return;
   const btn = findButton(sceneId);
   if (!btn) return;
   const dom = isFavorited(btn);
   const cache = await readScenesCache("favorite");
   const inCache = sceneId in cache.scenes;
-  if (dom === inCache && mirroredFavorite === dom) return;
   if (dom === inCache) {
     mirroredFavorite = dom;
     return;
   }
-  mirroredFavorite = dom;
-  if (dom) sendAdd(sceneId);
-  else sendRemove(sceneId);
+  if (dom && !inCache) {
+    mirroredFavorite = true;
+    sendAdd(sceneId);
+  }
 }
 
 function scheduleFavoriteAgainstCachePasses(sceneId: string): void {
@@ -92,7 +141,7 @@ function scheduleFavoriteAgainstCachePasses(sceneId: string): void {
 }
 
 function enqueueFavoriteDomPush(sceneId: string): void {
-  if (domFavoritePushRafId !== null) return;
+  if (syncingFromCache || domFavoritePushRafId !== null) return;
   domFavoritePushRafId = window.requestAnimationFrame(() => {
     domFavoritePushRafId = null;
     pushFavoriteFromDom(sceneId);
@@ -100,6 +149,7 @@ function enqueueFavoriteDomPush(sceneId: string): void {
 }
 
 function pushFavoriteFromDom(sceneId: string): void {
+  if (syncingFromCache) return;
   const btn = findButton(sceneId);
   if (!btn) return;
   const dom = isFavorited(btn);
@@ -114,7 +164,42 @@ function pushFavoriteFromDom(sceneId: string): void {
   else sendRemove(sceneId);
 }
 
+function flushFavoriteMirrorFromPage(): void {
+  if (!activeSceneId || syncingFromCache) return;
+  const sceneId = activeSceneId;
+  if (mirroredFavorite === null) {
+    pushFavoriteFromDom(sceneId);
+    return;
+  }
+  if (mirroredFavorite) sendAdd(sceneId);
+  else sendRemove(sceneId);
+}
+
+function onFavoriteLifecycleFlush(): void {
+  flushFavoriteMirrorFromPage();
+}
+
+function ensureLifecycleListeners(): void {
+  if (lifecycleInstalled) return;
+  lifecycleInstalled = true;
+  window.addEventListener("pagehide", onFavoriteLifecycleFlush, true);
+  document.addEventListener("visibilitychange", onFavoriteVisibility, true);
+}
+
+function removeLifecycleListeners(): void {
+  if (!lifecycleInstalled) return;
+  lifecycleInstalled = false;
+  window.removeEventListener("pagehide", onFavoriteLifecycleFlush, true);
+  document.removeEventListener("visibilitychange", onFavoriteVisibility, true);
+}
+
+function onFavoriteVisibility(): void {
+  if (document.visibilityState !== "hidden") return;
+  onFavoriteLifecycleFlush();
+}
+
 function onSceneHeartToggleCapture(event: Event): void {
+  if (syncingFromCache) return;
   const sceneId = activeSceneId;
   if (!sceneId) return;
   if (!(event.target instanceof Element)) return;
@@ -159,7 +244,11 @@ export function startSceneFavoriteSync(sceneId: string): void {
   stopSceneFavoriteSync();
   activeSceneId = sceneId;
   mirroredFavorite = null;
+  syncingFromCache = false;
   installFavoriteListeners(sceneId);
+  ensureLifecycleListeners();
+  void readScenesCache("favorite").then(applyFavoriteCache);
+  cacheUnsubscribe = watchScenesCache("favorite", applyFavoriteCache);
   const existing = findButton(sceneId);
   if (existing) {
     attachToButton(sceneId, existing);
@@ -170,7 +259,6 @@ export function startSceneFavoriteSync(sceneId: string): void {
     if (!btn) return;
     waitObserver?.disconnect();
     waitObserver = null;
-    mirroredFavorite = null;
     attachToButton(sceneId, btn);
   });
   waitObserver.observe(document.documentElement, {
@@ -180,8 +268,11 @@ export function startSceneFavoriteSync(sceneId: string): void {
 }
 
 export function stopSceneFavoriteSync(): void {
+  cacheUnsubscribe?.();
+  cacheUnsubscribe = null;
   activeSceneId = null;
   mirroredFavorite = null;
+  syncingFromCache = false;
   favoriteSyncAbort?.abort();
   favoriteSyncAbort = null;
   if (domFavoritePushRafId !== null) {
@@ -192,4 +283,5 @@ export function stopSceneFavoriteSync(): void {
   buttonObserver = null;
   waitObserver?.disconnect();
   waitObserver = null;
+  removeLifecycleListeners();
 }

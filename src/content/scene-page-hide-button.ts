@@ -69,8 +69,10 @@ function injectStyle(): void {
 
 function applyCache(cache: ScenesCache): void {
   if (!activeSceneId) return;
+  const wasHidden = isHidden;
   isHidden = activeSceneId in cache.scenes;
   refreshButton();
+  if (isHidden && !wasHidden) unfavoriteOnSiteIfActive();
   flushHiddenMirrorFromPage();
 }
 
@@ -106,7 +108,6 @@ function flushHiddenMirrorFromPage(): void {
   const want = isHidden;
   if (mirroredHidden === null) {
     mirroredHidden = want;
-    if (want) sendHiddenAdd(sceneId);
     return;
   }
   if (mirroredHidden === want) return;
