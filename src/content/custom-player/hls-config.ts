@@ -2,9 +2,8 @@ import type Hls from "hls.js";
 
 type HlsConfigInput = NonNullable<ConstructorParameters<typeof Hls>[0]>;
 
-export const FORWARD_BUFFER_TARGET_SEC = 45;
-export const FORWARD_BUFFER_CAP_SEC = 120;
-export const PREFETCH_WHEN_AHEAD_BELOW_SEC = 40;
+export const FORWARD_BUFFER_TARGET_SEC = 60;
+export const FORWARD_BUFFER_CAP_SEC = 60;
 
 export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   autoStartLoad: false,
@@ -28,7 +27,7 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   liveDurationInfinity: false,
   enableWorker: true,
   enableSoftwareAES: true,
-  startFragPrefetch: true,
+  startFragPrefetch: false,
   testBandwidth: false,
   progressive: true,
   lowLatencyMode: false,

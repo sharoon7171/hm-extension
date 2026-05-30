@@ -4,6 +4,7 @@ import {
   type SceneCacheKind,
   type ScenesCache,
 } from "../shared/scenes-cache";
+import { matchFavoriteClipsPage } from "./url-patterns";
 
 const HIDE_ATTR = "data-hotmovies-hide-card";
 const STYLE_ID = "hotmovies-ext-hide-card-style";
@@ -104,7 +105,13 @@ function scheduleRefresh(): void {
 }
 
 function shouldHide(id: string): boolean {
-  if (enabled.favorite && ids.favorite.has(id)) return true;
+  if (
+    enabled.favorite &&
+    ids.favorite.has(id) &&
+    !matchFavoriteClipsPage(location.href)
+  ) {
+    return true;
+  }
   if (enabled.hidden && ids.hidden.has(id)) return true;
   return false;
 }

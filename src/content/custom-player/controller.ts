@@ -6,7 +6,6 @@ import { formatBytes, formatBytesPerSecond, formatTimecode } from "./format";
 import { CUSTOM_PLAYER_HLS_CONFIG } from "./hls-config";
 import { createMetricsLoader } from "./metrics-loader";
 import { isPlaybackBuffered } from "./buffer-range";
-import { createPrefetchLoader, type PrefetchLoaderBundle } from "./prefetch-loader";
 import { buildPlayerElement, type PlayerElement } from "./player-element";
 import {
   clampLevelIndex,
@@ -75,8 +74,6 @@ export function createPlayerController(): PlayerController {
   });
   const abort = new AbortController();
   let hls: Hls | null = null;
-  let hlsRef: Hls | null = null;
-  let prefetch: PrefetchLoaderBundle | null = null;
   let menu: QualityMenu | null = null;
   let statsTimer: number | null = null;
   let source: SceneSource | null = null;
@@ -136,8 +133,6 @@ export function createPlayerController(): PlayerController {
     if (hls) {
       hls.destroy();
       hls = null;
-      hlsRef = null;
-      prefetch = null;
     }
     ui.root.remove();
   };
@@ -160,12 +155,10 @@ export function createPlayerController(): PlayerController {
       );
       return;
     }
-    prefetch = createPrefetchLoader(() => hlsRef, tracker, createMetricsLoader(tracker));
     hls = new Hls({
       ...CUSTOM_PLAYER_HLS_CONFIG,
-      loader: prefetch.Loader,
+      loader: createMetricsLoader(tracker),
     });
-    hlsRef = hls;
     hls.attachMedia(ui.video);
     hls.on(Hls.Events.MEDIA_ATTACHED, () => {
       hls?.loadSource(playlistUrl);
@@ -289,12 +282,9 @@ export function createPlayerController(): PlayerController {
       ui.time.total.textContent = formatTimecode(duration);
     });
     ui.video.addEventListener("seeking", () => {
-      if (!playbackEverStarted || !hls || !prefetch) return;
+      if (!playbackEverStarted || !hls) return;
       const t = ui.video.currentTime;
-      if (!isPlaybackBuffered(ui.video, t)) {
-        prefetch.primeAtSeek(hls, t);
-        syncAfterSeek();
-      }
+      if (!isPlaybackBuffered(ui.video, t)) syncAfterSeek();
     });
     ui.video.addEventListener("waiting", () => {
       ui.seek.track.dataset.waiting = "true";

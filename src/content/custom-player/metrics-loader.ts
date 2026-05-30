@@ -46,7 +46,7 @@ export function createMetricsLoader(
     ): void {
       const isSegment = context.responseType === SEGMENT_RESPONSE_TYPE;
       const url = context.url;
-      if (isSegment) tracker.trackUrl(url);
+      if (isSegment) tracker.beginTransfer(url);
       const wrapped: LoaderCallbacks<LoaderContext> = {
         onSuccess: (
           response: LoaderResponse,
@@ -55,6 +55,7 @@ export function createMetricsLoader(
           networkDetails,
         ) => {
           if (isSegment) {
+            tracker.syncTransfer(url, stats);
             const bytes = stats.loaded || (response.data as ArrayBuffer)?.byteLength || 0;
             if (bytes > 0) tracker.recordFragment(bytes);
             tracker.noteResourceFinished(url);
@@ -63,15 +64,24 @@ export function createMetricsLoader(
           callbacks.onSuccess(response, stats, ctx, networkDetails);
         },
         onError: (error, ctx, networkDetails, stats) => {
-          if (isSegment) tracker.untrackUrl(url);
+          if (isSegment) {
+            tracker.noteResourceFinished(url);
+            tracker.untrackUrl(url);
+          }
           callbacks.onError?.(error, ctx, networkDetails, stats);
         },
         onTimeout: (stats, ctx, networkDetails) => {
-          if (isSegment) tracker.untrackUrl(url);
+          if (isSegment) {
+            tracker.noteResourceFinished(url);
+            tracker.untrackUrl(url);
+          }
           callbacks.onTimeout?.(stats, ctx, networkDetails);
         },
         onAbort: (stats, ctx, networkDetails) => {
-          if (isSegment) tracker.untrackUrl(url);
+          if (isSegment) {
+            tracker.noteResourceFinished(url);
+            tracker.untrackUrl(url);
+          }
           callbacks.onAbort?.(stats, ctx, networkDetails);
         },
         onProgress: (stats, ctx, data, networkDetails) => {

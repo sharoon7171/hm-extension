@@ -13,6 +13,9 @@ const STAR_URL_RE =
 const STAR_BIO_URL_RE =
   /^https?:\/\/(?:www\.)?hotmovies\.com\/(\d+)\/[^/]+-pornstar\.html(?:[?#]|$)/i;
 
+const FAVORITE_CLIPS_URL_RE =
+  /^https?:\/\/(?:www\.)?hotmovies\.com\/favorite-clips(?:[/?#]|$)/i;
+
 export function matchScenePage(url: string): { sceneId: string } | null {
   const clip = url.match(SCENE_URL_RE);
   if (clip) return { sceneId: clip[1] };
@@ -34,4 +37,8 @@ export function matchStarPage(url: string): { starId: string } | null {
 export function matchStarBioPage(url: string): { starId: string } | null {
   const match = url.match(STAR_BIO_URL_RE);
   return match ? { starId: match[1] } : null;
+}
+
+export function matchFavoriteClipsPage(url: string): boolean {
+  return FAVORITE_CLIPS_URL_RE.test(url);
 }
