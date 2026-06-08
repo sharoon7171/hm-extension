@@ -1,4 +1,3 @@
-import { clickFavoriteButton } from "./favorite-button-click";
 import type { SceneAddRequest, SceneRemoveRequest } from "../shared/messages";
 import {
   applyOptimisticAdd,
@@ -32,6 +31,7 @@ const STYLE_RULES = `
 `;
 
 let waitObserver: MutationObserver | null = null;
+let hideObserver: MutationObserver | null = null;
 let cacheUnsubscribe: (() => void) | null = null;
 let activeSceneId: string | null = null;
 let favoriteAnchor: HTMLElement | null = null;
@@ -43,7 +43,6 @@ export function startSceneHideButton(sceneId: string): void {
   activeSceneId = sceneId;
   lastSyncedHidden = null;
   injectStyle();
-  void readScenesCache("hidden").then(applyCache);
   cacheUnsubscribe = watchScenesCache("hidden", applyCache);
   ensureButton();
 }
@@ -51,6 +50,8 @@ export function startSceneHideButton(sceneId: string): void {
 export function stopSceneHideButton(): void {
   cacheUnsubscribe?.();
   cacheUnsubscribe = null;
+  hideObserver?.disconnect();
+  hideObserver = null;
   waitObserver?.disconnect();
   waitObserver = null;
   document.getElementById(WRAPPER_ID)?.remove();
@@ -69,6 +70,12 @@ function injectStyle(): void {
   (document.head ?? document.documentElement).appendChild(style);
 }
 
+function readHideFromButton(): boolean {
+  const wrapper = document.getElementById(WRAPPER_ID);
+  if (!wrapper) return false;
+  return wrapper.dataset.state === "hidden";
+}
+
 function applyCache(cache: ScenesCache): void {
   if (!activeSceneId) return;
   const inCache = activeSceneId in cache.scenes;
@@ -76,11 +83,9 @@ function applyCache(cache: ScenesCache): void {
     lastSyncedHidden = inCache;
     return;
   }
-  const wasHidden = isHidden;
+  lastSyncedHidden = inCache;
   isHidden = inCache;
   refreshButton();
-  if (isHidden && !wasHidden) unfavoriteOnSiteIfActive();
-  lastSyncedHidden = inCache;
 }
 
 function sendHiddenAdd(sceneId: string): void {
@@ -109,11 +114,48 @@ function sendHiddenRemove(sceneId: string): void {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
-function pushHiddenState(hidden: boolean): void {
-  if (!activeSceneId || lastSyncedHidden === hidden) return;
-  lastSyncedHidden = hidden;
+function syncHideToStorage(hidden: boolean): void {
+  if (!activeSceneId) return;
   if (hidden) sendHiddenAdd(activeSceneId);
   else sendHiddenRemove(activeSceneId);
+}
+
+function reportHideState(): void {
+  if (!activeSceneId) return;
+  const hidden = readHideFromButton();
+  isHidden = hidden;
+  if (lastSyncedHidden === hidden) return;
+  lastSyncedHidden = hidden;
+  syncHideToStorage(hidden);
+}
+
+async function reconcileHideOnLoad(): Promise<void> {
+  if (!activeSceneId) return;
+  const hidden = readHideFromButton();
+  isHidden = hidden;
+  lastSyncedHidden = hidden;
+  const cache = await readScenesCache("hidden");
+  const inCache = activeSceneId in cache.scenes;
+  if (hidden === inCache) return;
+  syncHideToStorage(hidden);
+}
+
+function attachHideObserver(wrapper: HTMLElement): void {
+  hideObserver?.disconnect();
+  hideObserver = new MutationObserver(reportHideState);
+  hideObserver.observe(wrapper, {
+    attributes: true,
+    attributeFilter: ["data-state", "aria-pressed"],
+  });
+}
+
+async function finishMount(): Promise<void> {
+  const wrapper = document.getElementById(WRAPPER_ID);
+  if (!wrapper) return;
+  attachHideObserver(wrapper);
+  const cache = await readScenesCache("hidden");
+  applyCache(cache);
+  await reconcileHideOnLoad();
 }
 
 function ensureButton(): void {
@@ -142,6 +184,7 @@ function tryMount(): boolean {
   const column = buildColumn(placement.favoriteColumn);
   placement.favoriteColumn.insertAdjacentElement("afterend", column);
   refreshButton();
+  void finishMount();
   return true;
 }
 
@@ -219,15 +262,6 @@ function onKeyDown(event: KeyboardEvent): void {
 function onClick(event: Event): void {
   event.preventDefault();
   if (!activeSceneId) return;
-  const willHide = !isHidden;
-  isHidden = willHide;
+  isHidden = !isHidden;
   refreshButton();
-  if (willHide) unfavoriteOnSiteIfActive();
-  pushHiddenState(willHide);
-}
-
-function unfavoriteOnSiteIfActive(): void {
-  if (!favoriteAnchor || !favoriteAnchor.isConnected) return;
-  if (!favoriteAnchor.classList.contains("active")) return;
-  clickFavoriteButton(favoriteAnchor);
 }
