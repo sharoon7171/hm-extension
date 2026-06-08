@@ -53,12 +53,35 @@ export async function readScenesCache(kind: SceneCacheKind): Promise<ScenesCache
   return normalize(got[key]);
 }
 
+export function cachesEqual(a: ScenesCache, b: ScenesCache): boolean {
+  if (a.uid !== b.uid || a.ready !== b.ready) return false;
+  const aKeys = Object.keys(a.scenes).sort();
+  const bKeys = Object.keys(b.scenes).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i += 1) {
+    if (aKeys[i] !== bKeys[i]) return false;
+    const left = a.scenes[aKeys[i]];
+    const right = b.scenes[bKeys[i]];
+    if (
+      left.sceneId !== right.sceneId ||
+      left.title !== right.title ||
+      left.href !== right.href
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function writeScenesCache(
   kind: SceneCacheKind,
   next: ScenesCache,
 ): Promise<void> {
   const key = storageKey(kind);
-  await chrome.storage.local.set({ [key]: next });
+  const normalized = normalize(next);
+  const current = await readScenesCache(kind);
+  if (cachesEqual(current, normalized)) return;
+  await chrome.storage.local.set({ [key]: normalized });
 }
 
 type OptimisticAddInput = {
@@ -111,23 +134,6 @@ export async function applyOptimisticRemove(
   });
 }
 
-export const SCENES_CACHE_BROADCAST_TYPE = "scenesCacheUpdated" as const;
-
-export type ScenesCacheBroadcast = {
-  type: typeof SCENES_CACHE_BROADCAST_TYPE;
-  kind: SceneCacheKind;
-  cache: ScenesCache;
-};
-
-function isScenesCacheBroadcast(value: unknown): value is ScenesCacheBroadcast {
-  if (!value || typeof value !== "object") return false;
-  const v = value as Record<string, unknown>;
-  return (
-    v.type === SCENES_CACHE_BROADCAST_TYPE &&
-    (v.kind === "favorite" || v.kind === "hidden")
-  );
-}
-
 export function watchScenesCache(
   kind: SceneCacheKind,
   onChange: (cache: ScenesCache) => void,
@@ -141,16 +147,9 @@ export function watchScenesCache(
     if (!(key in changes)) return;
     onChange(normalize(changes[key].newValue));
   };
-  const fromMessage = (message: unknown) => {
-    if (!isScenesCacheBroadcast(message)) return;
-    if (message.kind !== kind) return;
-    onChange(normalize(message.cache));
-  };
   chrome.storage.onChanged.addListener(fromStorage);
-  chrome.runtime.onMessage.addListener(fromMessage);
   return () => {
     chrome.storage.onChanged.removeListener(fromStorage);
-    chrome.runtime.onMessage.removeListener(fromMessage);
   };
 }
 

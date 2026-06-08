@@ -30,6 +30,21 @@ export type CompleteSignInRequest = {
   url: string;
 };
 
+export type GetAuthStateRequest = { type: "getAuthState" };
+
+export type RequestSignInLinkMessage = {
+  type: "requestSignInLink";
+  email: string;
+};
+
+export type SignOutRequest = { type: "signOut" };
+
+export type AuthStateResponse = {
+  uid: string | null;
+  email: string | null;
+  ready: boolean;
+};
+
 export type AckResponse = { ok: true } | { ok: false; error: string };
 
 export async function requestText(url: string, signal: AbortSignal): Promise<string> {

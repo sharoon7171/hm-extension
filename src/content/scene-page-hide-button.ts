@@ -7,6 +7,11 @@ import {
   watchScenesCache,
   type ScenesCache,
 } from "../shared/scenes-cache";
+import {
+  findFavoriteButton,
+  readSceneCanonicalHref,
+  readSceneTitle,
+} from "./scene-favorite-dom";
 
 const WRAPPER_ID = "hotmovies-ext-scene-hide-button";
 const ICON_ID = "hotmovies-ext-scene-hide-icon";
@@ -31,17 +36,15 @@ let cacheUnsubscribe: (() => void) | null = null;
 let activeSceneId: string | null = null;
 let favoriteAnchor: HTMLElement | null = null;
 let isHidden = false;
-let mirroredHidden: boolean | null = null;
-let lifecycleInstalled = false;
+let lastSyncedHidden: boolean | null = null;
 
 export function startSceneHideButton(sceneId: string): void {
   stopSceneHideButton();
   activeSceneId = sceneId;
-  mirroredHidden = null;
+  lastSyncedHidden = null;
   injectStyle();
   void readScenesCache("hidden").then(applyCache);
   cacheUnsubscribe = watchScenesCache("hidden", applyCache);
-  ensureLifecycleListeners();
   ensureButton();
 }
 
@@ -55,8 +58,7 @@ export function stopSceneHideButton(): void {
   activeSceneId = null;
   favoriteAnchor = null;
   isHidden = false;
-  mirroredHidden = null;
-  removeLifecycleListeners();
+  lastSyncedHidden = null;
 }
 
 function injectStyle(): void {
@@ -69,18 +71,23 @@ function injectStyle(): void {
 
 function applyCache(cache: ScenesCache): void {
   if (!activeSceneId) return;
+  const inCache = activeSceneId in cache.scenes;
+  if (isHidden === inCache) {
+    lastSyncedHidden = inCache;
+    return;
+  }
   const wasHidden = isHidden;
-  isHidden = activeSceneId in cache.scenes;
+  isHidden = inCache;
   refreshButton();
   if (isHidden && !wasHidden) unfavoriteOnSiteIfActive();
-  flushHiddenMirrorFromPage();
+  lastSyncedHidden = inCache;
 }
 
 function sendHiddenAdd(sceneId: string): void {
   const scene = {
     sceneId,
     title: readSceneTitle(),
-    href: readCanonicalHref(),
+    href: readSceneCanonicalHref(),
   };
   void applyOptimisticAdd("hidden", scene);
   void applyOptimisticRemove("favorite", sceneId);
@@ -102,41 +109,11 @@ function sendHiddenRemove(sceneId: string): void {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
-function flushHiddenMirrorFromPage(): void {
-  if (!activeSceneId) return;
-  const sceneId = activeSceneId;
-  const want = isHidden;
-  if (mirroredHidden === null) {
-    mirroredHidden = want;
-    return;
-  }
-  if (mirroredHidden === want) return;
-  mirroredHidden = want;
-  if (want) sendHiddenAdd(sceneId);
-  else sendHiddenRemove(sceneId);
-}
-
-function onHiddenLifecycleFlush(): void {
-  flushHiddenMirrorFromPage();
-}
-
-function ensureLifecycleListeners(): void {
-  if (lifecycleInstalled) return;
-  lifecycleInstalled = true;
-  window.addEventListener("pagehide", onHiddenLifecycleFlush, true);
-  document.addEventListener("visibilitychange", onHiddenVisibility, true);
-}
-
-function removeLifecycleListeners(): void {
-  if (!lifecycleInstalled) return;
-  lifecycleInstalled = false;
-  window.removeEventListener("pagehide", onHiddenLifecycleFlush, true);
-  document.removeEventListener("visibilitychange", onHiddenVisibility, true);
-}
-
-function onHiddenVisibility(): void {
-  if (document.visibilityState !== "hidden") return;
-  onHiddenLifecycleFlush();
+function pushHiddenState(hidden: boolean): void {
+  if (!activeSceneId || lastSyncedHidden === hidden) return;
+  lastSyncedHidden = hidden;
+  if (hidden) sendHiddenAdd(activeSceneId);
+  else sendHiddenRemove(activeSceneId);
 }
 
 function ensureButton(): void {
@@ -169,9 +146,7 @@ function tryMount(): boolean {
 }
 
 function findFavoriteAnchor(sceneId: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    `a[data-ta="favorite"][data-tl="scene"][data-tid="${CSS.escape(sceneId)}"]`,
-  );
+  return findFavoriteButton(sceneId);
 }
 
 function isActionColumn(el: Element): boolean {
@@ -248,23 +223,11 @@ function onClick(event: Event): void {
   isHidden = willHide;
   refreshButton();
   if (willHide) unfavoriteOnSiteIfActive();
-  flushHiddenMirrorFromPage();
+  pushHiddenState(willHide);
 }
 
 function unfavoriteOnSiteIfActive(): void {
   if (!favoriteAnchor || !favoriteAnchor.isConnected) return;
   if (!favoriteAnchor.classList.contains("active")) return;
   clickFavoriteButton(favoriteAnchor);
-}
-
-function readSceneTitle(): string {
-  const heading = document.querySelector("h1.clip-title, h1#clip-title, h1.clip-name");
-  const fromHeading = heading?.textContent?.trim();
-  if (fromHeading) return fromHeading;
-  const raw = document.title || "";
-  return raw.replace(/\s*-\s*HotMovies\s*$/i, "").trim() || raw.trim();
-}
-
-function readCanonicalHref(): string {
-  return `${location.origin}${location.pathname}`;
 }

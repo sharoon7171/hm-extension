@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import type { User } from "firebase/auth";
 import type { SceneKind } from "../firebase/scenes";
-import { requestSignInLink, signOut, watchAuthState } from "../firebase/auth";
 import { EXTENSION_DISPLAY_NAME } from "../shared/extension-brand";
-import type { AckResponse, SceneDeleteAllRequest } from "../shared/messages";
+import {
+  EMPTY_AUTH_SNAPSHOT,
+  readAuthSnapshot,
+  watchAuthSnapshot,
+  type AuthSnapshot,
+} from "../shared/auth-snapshot";
+import type {
+  AckResponse,
+  AuthStateResponse,
+  SceneDeleteAllRequest,
+} from "../shared/messages";
 import {
   EMPTY_SCENES_CACHE,
   readScenesCache,
@@ -51,40 +59,47 @@ const LISTS: ListSpec[] = [
 ];
 
 export function FirebaseSection() {
-  const [authReady, setAuthReady] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [authSnapshot, setAuthSnapshot] = useState<AuthSnapshot>(EMPTY_AUTH_SNAPSHOT);
+  const [cacheUid, setCacheUid] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = watchAuthState(next => {
-      setUser(next);
-      setAuthReady(true);
-    });
-    return unsubscribe;
+    void readAuthSnapshot().then(setAuthSnapshot);
+    return watchAuthSnapshot(setAuthSnapshot);
   }, []);
 
-  if (!authReady) {
-    return (
-      <SectionCard title="Cloud sync" subtitle="Loading account…">
-        <div />
-      </SectionCard>
-    );
-  }
+  useEffect(() => {
+    void refreshAuthState().then(setAuthSnapshot);
+  }, []);
 
-  if (!user) return <SignInPanel />;
+  useEffect(() => {
+    void readScenesCache("favorite").then(cache => setCacheUid(cache.uid));
+    return watchScenesCache("favorite", cache => setCacheUid(cache.uid));
+  }, []);
+
+  const accountUid = authSnapshot.uid ?? cacheUid;
+  const accountEmail = authSnapshot.email;
+  const signedIn = !!accountUid;
+
+  if (!signedIn) {
+    return <SignInPanel checking={!authSnapshot.ready} />;
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <SignedInHeader user={user} />
+      <SignedInHeader
+        email={accountEmail ?? "Signed in"}
+        checking={!authSnapshot.ready && !accountEmail}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {LISTS.map(spec => (
-          <ScenesListPanel key={spec.cacheKind} user={user} spec={spec} />
+          <ScenesListPanel key={spec.cacheKind} accountUid={accountUid} spec={spec} />
         ))}
       </div>
     </div>
   );
 }
 
-function SignInPanel() {
+function SignInPanel({ checking }: { checking: boolean }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +113,8 @@ function SignInPanel() {
     }
     setStatus("sending");
     try {
-      await requestSignInLink(email.trim());
+      const response = await sendSignInLink(email.trim());
+      if (!response.ok) throw new Error(response.error);
       setStatus("sent");
     } catch (err) {
       setStatus("idle");
@@ -109,7 +125,9 @@ function SignInPanel() {
   return (
     <SectionCard
       title="Cloud sync"
-      subtitle={`${EXTENSION_DISPLAY_NAME}: sign in with a passwordless email link to keep favorited and hidden scenes in sync across devices.`}
+      subtitle={`${EXTENSION_DISPLAY_NAME}: sign in with a passwordless email link to keep favorited and hidden scenes in sync across devices.${
+        checking ? " Checking account…" : ""
+      }`}
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-3 pt-3">
         <label className="flex flex-col">
@@ -145,9 +163,15 @@ function SignInPanel() {
   );
 }
 
-function SignedInHeader({ user }: { user: User }) {
+function SignedInHeader({
+  email,
+  checking,
+}: {
+  email: string;
+  checking: boolean;
+}) {
   const onSignOut = async () => {
-    await signOut();
+    await sendSignOut();
   };
   return (
     <section className={cardClasses.root}>
@@ -155,8 +179,9 @@ function SignedInHeader({ user }: { user: User }) {
         <div className="flex flex-col">
           <h2 className={cardClasses.title}>Cloud sync</h2>
           <p className={cardClasses.subtitle}>
-            Signed in as <span className="text-neutral-900">{user.email}</span>.
-            {` ${EXTENSION_DISPLAY_NAME} streams favorites and hidden scenes live from the local cache.`}
+            Signed in as <span className="text-neutral-900">{email}</span>
+            {checking ? " · checking account…" : null}.{" "}
+            {`${EXTENSION_DISPLAY_NAME} streams favorites and hidden scenes live from the local cache.`}
           </p>
         </div>
         <button
@@ -171,7 +196,13 @@ function SignedInHeader({ user }: { user: User }) {
   );
 }
 
-function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
+function ScenesListPanel({
+  accountUid,
+  spec,
+}: {
+  accountUid: string;
+  spec: ListSpec;
+}) {
   const [cache, setCache] = useState<ScenesCache>(EMPTY_SCENES_CACHE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,8 +213,9 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
   }, [spec.cacheKind]);
 
   const scenes = useMemo(() => sortedScenes(cache), [cache]);
-  const matchesUser = cache.uid === user.uid;
-  const showLoading = !cache.ready || !matchesUser;
+  const matchesUser = cache.uid === accountUid;
+  const waitingForAccount = cache.uid !== null && !matchesUser;
+  const syncing = matchesUser && !cache.ready;
 
   const onDeleteAll = async () => {
     if (scenes.length === 0) return;
@@ -211,14 +243,16 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
     <SectionCard title={spec.title} subtitle={spec.subtitle}>
       <div className="flex items-center justify-between pt-3">
         <span className={listClasses.count}>
-          {showLoading
+          {waitingForAccount
             ? "Loading…"
-            : `${scenes.length} scene${scenes.length === 1 ? "" : "s"}`}
+            : `${scenes.length} scene${scenes.length === 1 ? "" : "s"}${
+                syncing ? " · syncing" : ""
+              }`}
         </span>
         <button
           type="button"
           onClick={onDeleteAll}
-          disabled={busy || showLoading || scenes.length === 0}
+          disabled={busy || waitingForAccount || scenes.length === 0}
           className={buttonClasses.danger}
         >
           {busy ? "Deleting…" : "Delete all"}
@@ -227,7 +261,7 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
       {error ? (
         <p className={`${noticeClasses.error} mt-2`}>Delete failed: {error}</p>
       ) : null}
-      {!showLoading && scenes.length > 0 ? (
+      {!waitingForAccount && scenes.length > 0 ? (
         <ul className="mt-3 max-h-80 overflow-y-auto rounded-lg ring-1 ring-neutral-200 px-3 bg-neutral-50">
           {scenes.map(scene => (
             <li key={scene.sceneId} className={listClasses.row}>
@@ -253,11 +287,61 @@ function ScenesListPanel({ user, spec }: { user: User; spec: ListSpec }) {
           ))}
         </ul>
       ) : null}
-      {!showLoading && scenes.length === 0 ? (
+      {!waitingForAccount && scenes.length === 0 ? (
         <p className={listClasses.empty}>{spec.emptyMessage}</p>
       ) : null}
     </SectionCard>
   );
+}
+
+function refreshAuthState(): Promise<AuthSnapshot> {
+  return new Promise(resolve => {
+    chrome.runtime.sendMessage({ type: "getAuthState" }, (response: AuthStateResponse | undefined) => {
+      if (chrome.runtime.lastError || !response) {
+        void readAuthSnapshot().then(resolve);
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+function sendSignInLink(email: string): Promise<AckResponse> {
+  return new Promise(resolve => {
+    chrome.runtime.sendMessage({ type: "requestSignInLink", email }, (response: AckResponse | undefined) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          ok: false,
+          error: chrome.runtime.lastError.message ?? "background unavailable",
+        });
+        return;
+      }
+      if (!response) {
+        resolve({ ok: false, error: "background unavailable" });
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+function sendSignOut(): Promise<AckResponse> {
+  return new Promise(resolve => {
+    chrome.runtime.sendMessage({ type: "signOut" }, (response: AckResponse | undefined) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          ok: false,
+          error: chrome.runtime.lastError.message ?? "background unavailable",
+        });
+        return;
+      }
+      if (!response) {
+        resolve({ ok: false, error: "background unavailable" });
+        return;
+      }
+      resolve(response);
+    });
+  });
 }
 
 function sendMessage(message: SceneDeleteAllRequest): Promise<AckResponse> {

@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -37,6 +38,36 @@ function scenesCollection(db: Firestore, uid: string, kind: SceneKind) {
 
 function sceneDoc(db: Firestore, uid: string, kind: SceneKind, sceneId: string) {
   return doc(db, "users", uid, kind, sceneId);
+}
+
+export function sameSceneInput(a: AddSceneInput, b: AddSceneInput): boolean {
+  return a.sceneId === b.sceneId && a.title === b.title && a.href === b.href;
+}
+
+export async function readSceneDoc(
+  db: Firestore,
+  uid: string,
+  kind: SceneKind,
+  sceneId: string,
+): Promise<AddSceneInput | null> {
+  const snap = await getDoc(sceneDoc(db, uid, kind, sceneId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    sceneId: typeof data.sceneId === "string" ? data.sceneId : sceneId,
+    title: typeof data.title === "string" ? data.title : "",
+    href: typeof data.href === "string" ? data.href : "",
+  };
+}
+
+export async function sceneDocExists(
+  db: Firestore,
+  uid: string,
+  kind: SceneKind,
+  sceneId: string,
+): Promise<boolean> {
+  const snap = await getDoc(sceneDoc(db, uid, kind, sceneId));
+  return snap.exists();
 }
 
 export async function addScene(

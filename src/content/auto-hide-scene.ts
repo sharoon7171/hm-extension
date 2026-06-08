@@ -4,33 +4,22 @@ import {
   applyOptimisticRemove,
   readScenesCache,
 } from "../shared/scenes-cache";
+import {
+  findFavoriteButton,
+  readSceneCanonicalHref,
+  readSceneTitle,
+} from "./scene-favorite-dom";
 
 let observer: MutationObserver | null = null;
 let fired = false;
 let pendingSceneId: string | null = null;
 let lifecycleInstalled = false;
 
-function favoriteButtonSelector(sceneId: string): string {
-  return `a[data-ta="favorite"][data-tl="scene"][data-tid="${CSS.escape(sceneId)}"]`;
-}
-
-function readSceneTitle(): string {
-  const heading = document.querySelector("h1.clip-title, h1#clip-title, h1.clip-name");
-  const fromHeading = heading?.textContent?.trim();
-  if (fromHeading) return fromHeading;
-  const raw = document.title || "";
-  return raw.replace(/\s*-\s*HotMovies\s*$/i, "").trim() || raw.trim();
-}
-
-function readCanonicalHref(): string {
-  return `${location.origin}${location.pathname}`;
-}
-
 function sendHiddenAdd(sceneId: string): void {
   const scene = {
     sceneId,
     title: readSceneTitle(),
-    href: readCanonicalHref(),
+    href: readSceneCanonicalHref(),
   };
   void applyOptimisticAdd("hidden", scene);
   void applyOptimisticRemove("favorite", sceneId);
@@ -79,8 +68,7 @@ async function hideOnce(sceneId: string): Promise<void> {
 
 function tryFire(sceneId: string): boolean {
   if (fired) return true;
-  const btn = document.querySelector<HTMLElement>(favoriteButtonSelector(sceneId));
-  if (!btn) return false;
+  if (!findFavoriteButton(sceneId)) return false;
   fired = true;
   void hideOnce(sceneId);
   return true;
