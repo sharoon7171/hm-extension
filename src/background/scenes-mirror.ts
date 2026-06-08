@@ -18,6 +18,7 @@ import {
   type SceneCacheKind,
   type ScenesCache,
 } from "../shared/scenes-cache";
+import { clearAllPending } from "./scenes-pending-sync";
 
 const COLLECTION_KIND: Record<SceneCacheKind, SceneKind> = {
   favorite: "favoriteScenes",
@@ -60,7 +61,7 @@ export async function startScenesMirror(): Promise<void> {
       void resetForSignedOut();
       return;
     }
-    void pullRemoteScenes(user.uid);
+    void syncPendingThenPull(user.uid);
   });
   void auth.authStateReady().then(() => {
     persistAuthSnapshot(auth.currentUser);
@@ -68,6 +69,7 @@ export async function startScenesMirror(): Promise<void> {
 }
 
 async function resetForSignedOut(): Promise<void> {
+  await clearAllPending();
   for (const kind of SCENE_CACHE_KINDS) {
     await writeScenesCache(kind, {
       uid: null,
@@ -121,18 +123,25 @@ function scenesCacheFromFirestore(
   return { uid, scenes: next, ready: true };
 }
 
-function requireUid(): string {
+async function requireUid(): Promise<string> {
   const auth = getFirebaseAuth();
+  await auth.authStateReady();
   const user = auth.currentUser;
   if (!user) throw new Error("not signed in");
   return user.uid;
+}
+
+async function syncPendingThenPull(uid: string): Promise<void> {
+  const { flushPendingScenes } = await import("./firestore-sync");
+  await flushPendingScenes();
+  await pullRemoteScenes(uid);
 }
 
 export async function addSceneIdempotent(
   kind: SceneKind,
   scene: AddSceneInput,
 ): Promise<void> {
-  const uid = requireUid();
+  const uid = await requireUid();
   const otherKind: SceneKind =
     kind === "favoriteScenes" ? "hiddenScenes" : "favoriteScenes";
   const db = getBackgroundFirestore();
@@ -144,7 +153,7 @@ export async function removeSceneIdempotent(
   kind: SceneKind,
   sceneId: string,
 ): Promise<void> {
-  const uid = requireUid();
+  const uid = await requireUid();
   const db = getBackgroundFirestore();
   await removeScene(db, uid, kind, sceneId);
 }
@@ -152,7 +161,7 @@ export async function removeSceneIdempotent(
 export async function deleteAllScenesIdempotent(
   kind: SceneKind,
 ): Promise<{ deleted: number }> {
-  const uid = requireUid();
+  const uid = await requireUid();
   const cacheKind: SceneCacheKind = kind === "favoriteScenes" ? "favorite" : "hidden";
   await writeScenesCache(cacheKind, {
     uid,

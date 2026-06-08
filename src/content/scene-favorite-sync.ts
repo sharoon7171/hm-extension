@@ -20,6 +20,7 @@ let activeSceneId: string | null = null;
 let observedButton: HTMLAnchorElement | null = null;
 let lastObservedFavorite: boolean | null = null;
 let onFavoriteClick: ((event: Event) => void) | null = null;
+let onVisibilityChange: (() => void) | null = null;
 
 function scenePayload(sceneId: string) {
   return {
@@ -88,6 +89,16 @@ function settleFavoriteState(): void {
   void reconcileFavoriteDom();
 }
 
+function onButtonUpdated(): void {
+  const favorited = readFavorite();
+  if (favorited !== null && lastObservedFavorite === null) {
+    lastObservedFavorite = favorited;
+    void reconcileFavoriteDom();
+    return;
+  }
+  scheduleSettle();
+}
+
 function scheduleSettle(): void {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
@@ -104,6 +115,10 @@ function detachButton(): void {
   buttonObserver?.disconnect();
   buttonObserver = null;
   observedButton = null;
+  if (onVisibilityChange) {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    onVisibilityChange = null;
+  }
 }
 
 function attachToButton(btn: HTMLAnchorElement): void {
@@ -112,14 +127,20 @@ function attachToButton(btn: HTMLAnchorElement): void {
   lastObservedFavorite = null;
   onFavoriteClick = () => scheduleSettle();
   btn.addEventListener("click", onFavoriteClick, true);
-  buttonObserver = new MutationObserver(scheduleSettle);
+  buttonObserver = new MutationObserver(onButtonUpdated);
   buttonObserver.observe(btn, {
     attributes: true,
     attributeFilter: ["class"],
     childList: true,
     subtree: true,
   });
-  scheduleSettle();
+  onVisibilityChange = () => {
+    if (document.visibilityState !== "visible") return;
+    lastObservedFavorite = null;
+    onButtonUpdated();
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  onButtonUpdated();
 }
 
 function ensureButtonObserver(sceneId: string): void {
