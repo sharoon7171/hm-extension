@@ -15,7 +15,7 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": ["storage", "declarativeNetRequest", "cookies"],
+  "permissions": ["storage", "unlimitedStorage", "declarativeNetRequest", "cookies"],
   "host_permissions": [
     "https://www.hotmovies.com/*",
     "https://video.adultempire.com/*",

@@ -1,8 +1,8 @@
 import type { SceneAddRequest } from "../shared/messages";
 import {
-  applyOptimisticAdd,
-  applyOptimisticRemove,
+  addSceneToCache,
   readScenesCache,
+  removeSceneFromCache,
 } from "../shared/scenes-cache";
 import {
   findFavoriteButton,
@@ -21,8 +21,8 @@ function sendHiddenAdd(sceneId: string): void {
     title: readSceneTitle(),
     href: readSceneCanonicalHref(),
   };
-  void applyOptimisticAdd("hidden", scene);
-  void applyOptimisticRemove("favorite", sceneId);
+  void addSceneToCache("hidden", scene);
+  void removeSceneFromCache("favorite", sceneId);
   const message: SceneAddRequest = {
     type: "sceneAdd",
     kind: "hiddenScenes",

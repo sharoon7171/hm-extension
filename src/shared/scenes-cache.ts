@@ -84,15 +84,27 @@ export async function writeScenesCache(
   await chrome.storage.local.set({ [key]: normalized });
 }
 
-type OptimisticAddInput = {
+export function mergePulledScenes(
+  local: ScenesCache,
+  remote: ScenesCache,
+  uid: string,
+): ScenesCache {
+  const scenes = { ...local.scenes };
+  for (const [sceneId, scene] of Object.entries(remote.scenes)) {
+    if (!(sceneId in scenes)) scenes[sceneId] = scene;
+  }
+  return { uid, scenes, ready: true };
+}
+
+type SceneCacheInput = {
   sceneId: string;
   title: string;
   href: string;
 };
 
-export async function applyOptimisticAdd(
+export async function addSceneToCache(
   kind: SceneCacheKind,
-  scene: OptimisticAddInput,
+  scene: SceneCacheInput,
 ): Promise<void> {
   const current = await readScenesCache(kind);
   const existing = current.scenes[scene.sceneId];
@@ -103,7 +115,7 @@ export async function applyOptimisticAdd(
   ) {
     return;
   }
-  const next: ScenesCache = {
+  await writeScenesCache(kind, {
     uid: current.uid,
     scenes: {
       ...current.scenes,
@@ -115,11 +127,10 @@ export async function applyOptimisticAdd(
       },
     },
     ready: current.ready,
-  };
-  await writeScenesCache(kind, next);
+  });
 }
 
-export async function applyOptimisticRemove(
+export async function removeSceneFromCache(
   kind: SceneCacheKind,
   sceneId: string,
 ): Promise<void> {

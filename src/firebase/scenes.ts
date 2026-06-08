@@ -2,9 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
   getDocs,
-  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -12,7 +10,6 @@ import {
   Timestamp,
   writeBatch,
   type Firestore,
-  type Unsubscribe,
 } from "firebase/firestore";
 
 const SCENES_BATCH_SIZE = 400;
@@ -36,38 +33,8 @@ function scenesCollection(db: Firestore, uid: string, kind: SceneKind) {
   return collection(db, "users", uid, kind);
 }
 
-function sceneDoc(db: Firestore, uid: string, kind: SceneKind, sceneId: string) {
+function sceneDocRef(db: Firestore, uid: string, kind: SceneKind, sceneId: string) {
   return doc(db, "users", uid, kind, sceneId);
-}
-
-export function sameSceneInput(a: AddSceneInput, b: AddSceneInput): boolean {
-  return a.sceneId === b.sceneId && a.title === b.title && a.href === b.href;
-}
-
-export async function readSceneDoc(
-  db: Firestore,
-  uid: string,
-  kind: SceneKind,
-  sceneId: string,
-): Promise<AddSceneInput | null> {
-  const snap = await getDoc(sceneDoc(db, uid, kind, sceneId));
-  if (!snap.exists()) return null;
-  const data = snap.data();
-  return {
-    sceneId: typeof data.sceneId === "string" ? data.sceneId : sceneId,
-    title: typeof data.title === "string" ? data.title : "",
-    href: typeof data.href === "string" ? data.href : "",
-  };
-}
-
-export async function sceneDocExists(
-  db: Firestore,
-  uid: string,
-  kind: SceneKind,
-  sceneId: string,
-): Promise<boolean> {
-  const snap = await getDoc(sceneDoc(db, uid, kind, sceneId));
-  return snap.exists();
 }
 
 export async function addScene(
@@ -77,7 +44,7 @@ export async function addScene(
   scene: AddSceneInput,
 ): Promise<void> {
   await setDoc(
-    sceneDoc(db, uid, kind, scene.sceneId),
+    sceneDocRef(db, uid, kind, scene.sceneId),
     {
       sceneId: scene.sceneId,
       title: scene.title,
@@ -94,34 +61,26 @@ export async function removeScene(
   kind: SceneKind,
   sceneId: string,
 ): Promise<void> {
-  await deleteDoc(sceneDoc(db, uid, kind, sceneId));
+  await deleteDoc(sceneDocRef(db, uid, kind, sceneId));
 }
 
-export function subscribeScenes(
+export async function fetchScenes(
   db: Firestore,
   uid: string,
   kind: SceneKind,
-  onChange: (scenes: SavedScene[]) => void,
-  onError: (error: Error) => void,
-): Unsubscribe {
+): Promise<SavedScene[]> {
   const q = query(scenesCollection(db, uid, kind), orderBy("addedAt", "desc"));
-  return onSnapshot(
-    q,
-    snapshot => {
-      const scenes: SavedScene[] = snapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        const addedAt = data.addedAt instanceof Timestamp ? data.addedAt.toDate() : null;
-        return {
-          sceneId: typeof data.sceneId === "string" ? data.sceneId : docSnap.id,
-          title: typeof data.title === "string" ? data.title : "",
-          href: typeof data.href === "string" ? data.href : "",
-          addedAt,
-        };
-      });
-      onChange(scenes);
-    },
-    error => onError(error as Error),
-  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(docSnap => {
+    const data = docSnap.data();
+    const addedAt = data.addedAt instanceof Timestamp ? data.addedAt.toDate() : null;
+    return {
+      sceneId: typeof data.sceneId === "string" ? data.sceneId : docSnap.id,
+      title: typeof data.title === "string" ? data.title : "",
+      href: typeof data.href === "string" ? data.href : "",
+      addedAt,
+    };
+  });
 }
 
 export async function deleteAllScenes(

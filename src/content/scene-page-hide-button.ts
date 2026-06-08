@@ -1,16 +1,18 @@
 import type { SceneAddRequest, SceneRemoveRequest } from "../shared/messages";
 import {
-  applyOptimisticAdd,
-  applyOptimisticRemove,
+  addSceneToCache,
   readScenesCache,
+  removeSceneFromCache,
   watchScenesCache,
   type ScenesCache,
 } from "../shared/scenes-cache";
 import {
   findFavoriteButton,
+  isFavoriteButtonActive,
   readSceneCanonicalHref,
   readSceneTitle,
 } from "./scene-favorite-dom";
+import { clickFavoriteButton } from "./favorite-button-click";
 
 const WRAPPER_ID = "hotmovies-ext-scene-hide-button";
 const ICON_ID = "hotmovies-ext-scene-hide-icon";
@@ -83,9 +85,18 @@ function applyCache(cache: ScenesCache): void {
     lastSyncedHidden = inCache;
     return;
   }
+  const wasHidden = isHidden;
   lastSyncedHidden = inCache;
   isHidden = inCache;
   refreshButton();
+  if (isHidden && !wasHidden) unfavoriteSiteIfActive();
+}
+
+function unfavoriteSiteIfActive(): void {
+  const anchor = activeSceneId ? findFavoriteButton(activeSceneId) : null;
+  if (!anchor?.isConnected) return;
+  if (!isFavoriteButtonActive(anchor)) return;
+  clickFavoriteButton(anchor);
 }
 
 function sendHiddenAdd(sceneId: string): void {
@@ -94,8 +105,8 @@ function sendHiddenAdd(sceneId: string): void {
     title: readSceneTitle(),
     href: readSceneCanonicalHref(),
   };
-  void applyOptimisticAdd("hidden", scene);
-  void applyOptimisticRemove("favorite", sceneId);
+  void addSceneToCache("hidden", scene);
+  void removeSceneFromCache("favorite", sceneId);
   const message: SceneAddRequest = {
     type: "sceneAdd",
     kind: "hiddenScenes",
@@ -105,7 +116,7 @@ function sendHiddenAdd(sceneId: string): void {
 }
 
 function sendHiddenRemove(sceneId: string): void {
-  void applyOptimisticRemove("hidden", sceneId);
+  void removeSceneFromCache("hidden", sceneId);
   const message: SceneRemoveRequest = {
     type: "sceneRemove",
     kind: "hiddenScenes",
@@ -116,8 +127,12 @@ function sendHiddenRemove(sceneId: string): void {
 
 function syncHideToStorage(hidden: boolean): void {
   if (!activeSceneId) return;
-  if (hidden) sendHiddenAdd(activeSceneId);
-  else sendHiddenRemove(activeSceneId);
+  if (hidden) {
+    unfavoriteSiteIfActive();
+    sendHiddenAdd(activeSceneId);
+    return;
+  }
+  sendHiddenRemove(activeSceneId);
 }
 
 function reportHideState(): void {
@@ -126,17 +141,6 @@ function reportHideState(): void {
   isHidden = hidden;
   if (lastSyncedHidden === hidden) return;
   lastSyncedHidden = hidden;
-  syncHideToStorage(hidden);
-}
-
-async function reconcileHideOnLoad(): Promise<void> {
-  if (!activeSceneId) return;
-  const hidden = readHideFromButton();
-  isHidden = hidden;
-  lastSyncedHidden = hidden;
-  const cache = await readScenesCache("hidden");
-  const inCache = activeSceneId in cache.scenes;
-  if (hidden === inCache) return;
   syncHideToStorage(hidden);
 }
 
@@ -149,13 +153,26 @@ function attachHideObserver(wrapper: HTMLElement): void {
   });
 }
 
+async function reconcileHideWithCache(): Promise<void> {
+  if (!activeSceneId) return;
+  const hidden = readHideFromButton();
+  isHidden = hidden;
+  const cache = await readScenesCache("hidden");
+  const inCache = activeSceneId in cache.scenes;
+  if (hidden === inCache) {
+    lastSyncedHidden = hidden;
+    return;
+  }
+  lastSyncedHidden = hidden;
+  syncHideToStorage(hidden);
+}
+
 async function finishMount(): Promise<void> {
   const wrapper = document.getElementById(WRAPPER_ID);
   if (!wrapper) return;
   attachHideObserver(wrapper);
-  const cache = await readScenesCache("hidden");
-  applyCache(cache);
-  await reconcileHideOnLoad();
+  applyCache(await readScenesCache("hidden"));
+  await reconcileHideWithCache();
 }
 
 function ensureButton(): void {
@@ -183,7 +200,6 @@ function tryMount(): boolean {
   if (!placement) return false;
   const column = buildColumn(placement.favoriteColumn);
   placement.favoriteColumn.insertAdjacentElement("afterend", column);
-  refreshButton();
   void finishMount();
   return true;
 }

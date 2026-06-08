@@ -1,20 +1,16 @@
-import type { Unsubscribe } from "firebase/firestore";
 import { getFirebaseAuth } from "../firebase/auth";
 import { getBackgroundFirestore } from "../firebase/firestore-background";
 import {
   addScene,
   deleteAllScenes,
-  readSceneDoc,
+  fetchScenes,
   removeScene,
-  sameSceneInput,
-  sceneDocExists,
-  subscribeScenes,
   type AddSceneInput,
   type SceneKind,
 } from "../firebase/scenes";
 import { writeAuthSnapshot } from "../shared/auth-snapshot";
 import {
-  cachesEqual,
+  mergePulledScenes,
   readScenesCache,
   SCENE_CACHE_KINDS,
   writeScenesCache,
@@ -23,19 +19,11 @@ import {
   type ScenesCache,
 } from "../shared/scenes-cache";
 
-type Entry = {
-  cacheKind: SceneCacheKind;
-  collectionKind: SceneKind;
-  unsubscribeSnapshot: Unsubscribe | null;
-  activeUid: string | null;
-};
-
 const COLLECTION_KIND: Record<SceneCacheKind, SceneKind> = {
   favorite: "favoriteScenes",
   hidden: "hiddenScenes",
 };
 
-const entries = new Map<SceneCacheKind, Entry>();
 let authUnsubscribe: (() => void) | null = null;
 
 function persistAuthSnapshot(user: { uid: string; email: string | null } | null): void {
@@ -65,14 +53,6 @@ export async function readBackgroundAuthState(): Promise<{
 
 export async function startScenesMirror(): Promise<void> {
   if (authUnsubscribe) return;
-  for (const kind of SCENE_CACHE_KINDS) {
-    entries.set(kind, {
-      cacheKind: kind,
-      collectionKind: COLLECTION_KIND[kind],
-      unsubscribeSnapshot: null,
-      activeUid: null,
-    });
-  }
   const auth = getFirebaseAuth();
   authUnsubscribe = auth.onAuthStateChanged(user => {
     persistAuthSnapshot(user);
@@ -80,7 +60,7 @@ export async function startScenesMirror(): Promise<void> {
       void resetForSignedOut();
       return;
     }
-    void attachToUser(user.uid);
+    void pullRemoteScenes(user.uid);
   });
   void auth.authStateReady().then(() => {
     persistAuthSnapshot(auth.currentUser);
@@ -88,10 +68,8 @@ export async function startScenesMirror(): Promise<void> {
 }
 
 async function resetForSignedOut(): Promise<void> {
-  for (const entry of entries.values()) {
-    detachSnapshot(entry);
-    entry.activeUid = null;
-    await writeScenesCacheIfChanged(entry.cacheKind, {
+  for (const kind of SCENE_CACHE_KINDS) {
+    await writeScenesCache(kind, {
       uid: null,
       scenes: {},
       ready: true,
@@ -99,42 +77,26 @@ async function resetForSignedOut(): Promise<void> {
   }
 }
 
-async function attachToUser(uid: string): Promise<void> {
+async function pullRemoteScenes(uid: string): Promise<void> {
   const db = getBackgroundFirestore();
-  for (const entry of entries.values()) {
-    if (entry.unsubscribeSnapshot && entry.activeUid === uid) continue;
-    detachSnapshot(entry);
-    entry.activeUid = uid;
-    const current = await readScenesCache(entry.cacheKind);
-    if (current.uid !== uid) {
-      await writeScenesCacheIfChanged(entry.cacheKind, {
-        uid,
-        scenes: {},
-        ready: false,
-      });
+  for (const kind of SCENE_CACHE_KINDS) {
+    const local = await readScenesCache(kind);
+    if (local.uid !== uid) {
+      await writeScenesCache(kind, { uid, scenes: {}, ready: false });
     }
-    entry.unsubscribeSnapshot = subscribeScenes(
-      db,
-      uid,
-      entry.collectionKind,
-      async scenes => {
-        const next = scenesCacheFromFirestore(uid, scenes);
-        await writeScenesCacheIfChanged(entry.cacheKind, next);
-      },
-      error => {
-        console.warn(
-          `[hotmovies-ext] ${entry.collectionKind} snapshot error`,
-          error,
-        );
-      },
-    );
-  }
-}
-
-function detachSnapshot(entry: Entry): void {
-  if (entry.unsubscribeSnapshot) {
-    entry.unsubscribeSnapshot();
-    entry.unsubscribeSnapshot = null;
+    try {
+      const remoteRows = await fetchScenes(db, uid, COLLECTION_KIND[kind]);
+      const remote = scenesCacheFromFirestore(uid, remoteRows);
+      const current = await readScenesCache(kind);
+      const merged = mergePulledScenes(current, remote, uid);
+      await writeScenesCache(kind, merged);
+    } catch (error) {
+      console.warn(`[hotmovies-ext] pull ${COLLECTION_KIND[kind]} failed`, error);
+      const current = await readScenesCache(kind);
+      if (!current.ready) {
+        await writeScenesCache(kind, { uid: current.uid ?? uid, scenes: current.scenes, ready: true });
+      }
+    }
   }
 }
 
@@ -159,22 +121,6 @@ function scenesCacheFromFirestore(
   return { uid, scenes: next, ready: true };
 }
 
-async function writeScenesCacheIfChanged(
-  kind: SceneCacheKind,
-  next: ScenesCache,
-): Promise<void> {
-  const current = await readScenesCache(kind);
-  if (cachesEqual(current, next)) return;
-  await writeScenesCache(kind, next);
-}
-
-function entryFor(kind: SceneKind): Entry {
-  const cacheKind: SceneCacheKind = kind === "favoriteScenes" ? "favorite" : "hidden";
-  const entry = entries.get(cacheKind);
-  if (!entry) throw new Error("scenes mirror not started");
-  return entry;
-}
-
 function requireUid(): string {
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
@@ -185,43 +131,30 @@ function requireUid(): string {
 export async function addSceneIdempotent(
   kind: SceneKind,
   scene: AddSceneInput,
-): Promise<{ written: boolean }> {
+): Promise<void> {
   const uid = requireUid();
   const otherKind: SceneKind =
     kind === "favoriteScenes" ? "hiddenScenes" : "favoriteScenes";
   const db = getBackgroundFirestore();
-  const writes: Promise<unknown>[] = [];
-  const existing = await readSceneDoc(db, uid, kind, scene.sceneId);
-  if (!existing || !sameSceneInput(existing, scene)) {
-    writes.push(addScene(db, uid, kind, scene));
-  }
-  if (await sceneDocExists(db, uid, otherKind, scene.sceneId)) {
-    writes.push(removeScene(db, uid, otherKind, scene.sceneId));
-  }
-  if (writes.length === 0) return { written: false };
-  await Promise.all(writes);
-  return { written: true };
+  await addScene(db, uid, kind, scene);
+  await removeScene(db, uid, otherKind, scene.sceneId);
 }
 
 export async function removeSceneIdempotent(
   kind: SceneKind,
   sceneId: string,
-): Promise<{ written: boolean }> {
+): Promise<void> {
   const uid = requireUid();
   const db = getBackgroundFirestore();
-  if (!(await sceneDocExists(db, uid, kind, sceneId))) {
-    return { written: false };
-  }
   await removeScene(db, uid, kind, sceneId);
-  return { written: true };
 }
 
 export async function deleteAllScenesIdempotent(
   kind: SceneKind,
 ): Promise<{ deleted: number }> {
   const uid = requireUid();
-  const entry = entryFor(kind);
-  await writeScenesCacheIfChanged(entry.cacheKind, {
+  const cacheKind: SceneCacheKind = kind === "favoriteScenes" ? "favorite" : "hidden";
+  await writeScenesCache(cacheKind, {
     uid,
     scenes: {},
     ready: true,

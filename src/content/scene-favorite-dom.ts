@@ -6,12 +6,19 @@ export function findFavoriteButton(sceneId: string): HTMLAnchorElement | null {
   return document.querySelector<HTMLAnchorElement>(favoriteButtonSelector(sceneId));
 }
 
-export function isFavoriteButtonActive(btn: HTMLAnchorElement): boolean {
+export function readFavoriteButtonActive(
+  btn: HTMLAnchorElement,
+): boolean | null {
   if (btn.classList.contains("active")) return true;
   const icon = btn.querySelector("i");
-  if (!icon) return false;
+  if (!icon) return null;
   if (icon.classList.contains("fa-heart-o")) return false;
-  return icon.classList.contains("fa-heart");
+  if (icon.classList.contains("fa-heart")) return true;
+  return null;
+}
+
+export function isFavoriteButtonActive(btn: HTMLAnchorElement): boolean {
+  return readFavoriteButtonActive(btn) === true;
 }
 
 export function readSceneTitle(): string {

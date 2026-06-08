@@ -1,30 +1,35 @@
 import type { SceneAddRequest, SceneRemoveRequest } from "../shared/messages";
 import {
-  applyOptimisticAdd,
-  applyOptimisticRemove,
+  addSceneToCache,
   readScenesCache,
+  removeSceneFromCache,
 } from "../shared/scenes-cache";
 import {
   findFavoriteButton,
-  isFavoriteButtonActive,
+  readFavoriteButtonActive,
   readSceneCanonicalHref,
   readSceneTitle,
 } from "./scene-favorite-dom";
 
+const SETTLE_MS = 400;
+
 let waitObserver: MutationObserver | null = null;
 let buttonObserver: MutationObserver | null = null;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let activeSceneId: string | null = null;
 let observedButton: HTMLAnchorElement | null = null;
 let lastObservedFavorite: boolean | null = null;
+let onFavoriteClick: ((event: Event) => void) | null = null;
 
-function sendAdd(sceneId: string): void {
-  const scene = {
+function scenePayload(sceneId: string) {
+  return {
     sceneId,
     title: readSceneTitle(),
     href: readSceneCanonicalHref(),
   };
-  void applyOptimisticAdd("favorite", scene);
-  void applyOptimisticRemove("hidden", sceneId);
+}
+
+function sendAdd(scene: { sceneId: string; title: string; href: string }): void {
   const message: SceneAddRequest = {
     type: "sceneAdd",
     kind: "favoriteScenes",
@@ -34,7 +39,6 @@ function sendAdd(sceneId: string): void {
 }
 
 function sendRemove(sceneId: string): void {
-  void applyOptimisticRemove("favorite", sceneId);
   const message: SceneRemoveRequest = {
     type: "sceneRemove",
     kind: "favoriteScenes",
@@ -43,41 +47,79 @@ function sendRemove(sceneId: string): void {
   chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError);
 }
 
-function syncFavoriteToStorage(favorited: boolean): void {
+function syncFavoriteToCache(favorited: boolean): void {
   if (!activeSceneId) return;
-  if (favorited) sendAdd(activeSceneId);
-  else sendRemove(activeSceneId);
+  const scene = scenePayload(activeSceneId);
+  if (favorited) {
+    void addSceneToCache("favorite", scene);
+    void removeSceneFromCache("hidden", activeSceneId);
+    sendAdd(scene);
+    return;
+  }
+  void removeSceneFromCache("favorite", activeSceneId);
+  sendRemove(activeSceneId);
 }
 
-function reportFavoriteState(): void {
-  if (!activeSceneId || !observedButton?.isConnected) return;
-  const favorited = isFavoriteButtonActive(observedButton);
+function readFavorite(): boolean | null {
+  if (!observedButton?.isConnected) return null;
+  return readFavoriteButtonActive(observedButton);
+}
+
+async function pushFavoriteIfNeeded(favorited: boolean): Promise<void> {
+  if (!activeSceneId) return;
+  const favoriteCache = await readScenesCache("favorite");
+  const inFavorite = activeSceneId in favoriteCache.scenes;
+  if (favorited === inFavorite) return;
+  syncFavoriteToCache(favorited);
+}
+
+async function reconcileFavoriteDom(): Promise<void> {
+  const favorited = readFavorite();
+  if (favorited === null) return;
+  await pushFavoriteIfNeeded(favorited);
+}
+
+function settleFavoriteState(): void {
+  if (!activeSceneId) return;
+  const favorited = readFavorite();
+  if (favorited === null) return;
   if (lastObservedFavorite === favorited) return;
   lastObservedFavorite = favorited;
-  syncFavoriteToStorage(favorited);
+  void reconcileFavoriteDom();
 }
 
-async function reconcileFavoriteOnLoad(btn: HTMLAnchorElement): Promise<void> {
-  if (!activeSceneId) return;
-  const favorited = isFavoriteButtonActive(btn);
-  lastObservedFavorite = favorited;
-  const cache = await readScenesCache("favorite");
-  const inCache = activeSceneId in cache.scenes;
-  if (favorited === inCache) return;
-  syncFavoriteToStorage(favorited);
+function scheduleSettle(): void {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    settleFavoriteState();
+  }, SETTLE_MS);
+}
+
+function detachButton(): void {
+  if (observedButton && onFavoriteClick) {
+    observedButton.removeEventListener("click", onFavoriteClick, true);
+  }
+  onFavoriteClick = null;
+  buttonObserver?.disconnect();
+  buttonObserver = null;
+  observedButton = null;
 }
 
 function attachToButton(btn: HTMLAnchorElement): void {
+  detachButton();
   observedButton = btn;
-  buttonObserver?.disconnect();
-  buttonObserver = new MutationObserver(reportFavoriteState);
+  lastObservedFavorite = null;
+  onFavoriteClick = () => scheduleSettle();
+  btn.addEventListener("click", onFavoriteClick, true);
+  buttonObserver = new MutationObserver(scheduleSettle);
   buttonObserver.observe(btn, {
     attributes: true,
     attributeFilter: ["class"],
     childList: true,
     subtree: true,
   });
-  void reconcileFavoriteOnLoad(btn);
+  scheduleSettle();
 }
 
 function ensureButtonObserver(sceneId: string): void {
@@ -108,11 +150,11 @@ export function startSceneFavoriteSync(sceneId: string): void {
 }
 
 export function stopSceneFavoriteSync(): void {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = null;
+  detachButton();
   activeSceneId = null;
-  observedButton = null;
   lastObservedFavorite = null;
-  buttonObserver?.disconnect();
-  buttonObserver = null;
   waitObserver?.disconnect();
   waitObserver = null;
 }
