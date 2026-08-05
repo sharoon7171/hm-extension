@@ -198,15 +198,24 @@ export function createPlayerController(): PlayerController {
       if (data.fatal) {
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           if (playbackEverStarted) {
-            hls?.startLoad();
+            hls?.startLoad(ui.video.currentTime);
           } else {
             showError(ui, `Playback error: ${data.details}`);
           }
         } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          hls?.recoverMediaError();
+          if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR && playbackEverStarted) {
+            resumeLoadingAtPlayhead();
+          } else {
+            hls?.recoverMediaError();
+          }
         } else {
           showError(ui, `Playback error: ${data.details}`);
         }
+      } else if (
+        data.details === Hls.ErrorDetails.BUFFER_FULL_ERROR &&
+        playbackEverStarted
+      ) {
+        resumeLoadingAtPlayhead();
       }
     });
   };
@@ -291,6 +300,7 @@ export function createPlayerController(): PlayerController {
       if (!playbackEverStarted) return;
       chipBufferingActive = true;
       syncPrepChip();
+      if (!isPlaybackBuffered(ui.video, ui.video.currentTime, 2)) resumeLoadingAtPlayhead();
     });
     ui.video.addEventListener("playing", () => {
       ui.seek.track.dataset.waiting = "false";
@@ -349,34 +359,27 @@ export function createPlayerController(): PlayerController {
     ui.root.addEventListener("keydown", onKey);
   };
 
+  const resumeLoadingAtPlayhead = (): void => {
+    if (!manifestParsed || destroyed || !hls || !lock) return;
+    if (!lock.isOwner()) lock.claim();
+    applyLockedLevel();
+    hls.startLoad(ui.video.currentTime);
+  };
+
   const ensurePlaybackPipeline = (): void => {
     if (!manifestParsed || !lock || destroyed || !hls) return;
     if (!playbackEverStarted) {
       playbackEverStarted = true;
-      lock.claim();
-      applyLockedLevel();
-      hls.startLoad(ui.video.currentTime);
+      resumeLoadingAtPlayhead();
       return;
     }
-    if (!lock.isOwner()) {
-      lock.claim();
-      applyLockedLevel();
-      hls.startLoad(ui.video.currentTime);
-    }
+    if (!lock.isOwner()) resumeLoadingAtPlayhead();
   };
 
   const syncAfterSeek = (): void => {
-    if (!manifestParsed || destroyed) return;
-    if (!playbackEverStarted) return;
-    if (!hls || !lock) return;
-    const t = ui.video.currentTime;
-    if (isPlaybackBuffered(ui.video, t)) return;
-    if (!lock.isOwner()) {
-      lock.claim();
-      applyLockedLevel();
-    }
-    applyLockedLevel();
-    hls.startLoad(t);
+    if (!manifestParsed || destroyed || !playbackEverStarted) return;
+    if (isPlaybackBuffered(ui.video, ui.video.currentTime)) return;
+    resumeLoadingAtPlayhead();
   };
 
   const togglePlay = (): void => {

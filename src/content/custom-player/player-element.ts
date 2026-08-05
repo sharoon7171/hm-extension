@@ -53,18 +53,20 @@ export function buildPlayerElement(): PlayerElement {
   root.dataset.hmPlayer = "1";
   root.tabIndex = 0;
 
+  const stage = div(cls.stage);
+
   const video = document.createElement("video");
   video.className = cls.video;
   video.playsInline = true;
   video.preload = "metadata";
-  root.appendChild(video);
+  stage.appendChild(video);
 
   const errorNote = div(cls.error);
   errorNote.hidden = true;
-  root.appendChild(errorNote);
+  stage.appendChild(errorNote);
 
   const centerHit = div(cls.centerHit);
-  root.appendChild(centerHit);
+  stage.appendChild(centerHit);
 
   const bigPlay = document.createElement("button");
   bigPlay.type = "button";
@@ -72,9 +74,7 @@ export function buildPlayerElement(): PlayerElement {
   bigPlay.setAttribute("aria-label", "Play");
   bigPlay.appendChild(buildIcon("play", cls.bigPlayIcon));
   bigPlay.dataset.show = "false";
-  root.appendChild(bigPlay);
-
-  const bottomBar = div(cls.bottomBar);
+  stage.appendChild(bigPlay);
 
   const prepStatus = div(cls.loadingPrepChip);
   prepStatus.dataset.show = "true";
@@ -83,6 +83,9 @@ export function buildPlayerElement(): PlayerElement {
   prepLabel.className = cls.loadingPrepText;
   prepLabel.textContent = "Opening stream…";
   prepStatus.appendChild(prepLabel);
+  stage.appendChild(prepStatus);
+
+  const bottomBar = div(cls.chrome);
 
   const seekWrap = div(cls.seekRow);
   const seekTrack = div(cls.seekTrack);
@@ -99,22 +102,24 @@ export function buildPlayerElement(): PlayerElement {
   seekWrap.appendChild(seekTrack);
 
   const controlsRow = div(cls.controlsRow);
+  const controlsLeft = div(cls.controlsLeft);
+  const controlsRight = div(cls.controlsRight);
 
   const playBtn = iconButton(cls);
   const playIcon = buildIcon("play", cls.icon);
   playBtn.appendChild(playIcon);
   playBtn.setAttribute("aria-label", "Play");
-  controlsRow.appendChild(playBtn);
+  controlsLeft.appendChild(playBtn);
 
   const skipBackBtn = iconButton(cls);
   skipBackBtn.appendChild(buildIcon("skipBackward", cls.icon));
   skipBackBtn.setAttribute("aria-label", "Back 10 seconds");
-  controlsRow.appendChild(skipBackBtn);
+  controlsLeft.appendChild(skipBackBtn);
 
   const skipFwdBtn = iconButton(cls);
   skipFwdBtn.appendChild(buildIcon("skipForward", cls.icon));
   skipFwdBtn.setAttribute("aria-label", "Forward 10 seconds");
-  controlsRow.appendChild(skipFwdBtn);
+  controlsLeft.appendChild(skipFwdBtn);
 
   const currentTime = document.createElement("span");
   currentTime.className = cls.time;
@@ -125,11 +130,42 @@ export function buildPlayerElement(): PlayerElement {
   const totalTime = document.createElement("span");
   totalTime.className = cls.time;
   totalTime.textContent = "0:00";
-  controlsRow.appendChild(currentTime);
-  controlsRow.appendChild(sep);
-  controlsRow.appendChild(totalTime);
+  controlsLeft.appendChild(currentTime);
+  controlsLeft.appendChild(sep);
+  controlsLeft.appendChild(totalTime);
 
-  const telemetryRow = div(cls.telemetryRow);
+  const menuWrap = div(cls.menuWrap);
+  const settingsBtn = iconButton(cls);
+  settingsBtn.appendChild(buildIcon("settings", cls.icon));
+  settingsBtn.setAttribute("aria-label", "Quality");
+  const menuPanel = div(cls.menu);
+  menuPanel.dataset.show = "false";
+  menuWrap.appendChild(settingsBtn);
+  menuWrap.appendChild(menuPanel);
+  controlsRight.appendChild(menuWrap);
+
+  const volumeWrapper = div(cls.volumeGroup);
+  const volumeBtn = iconButton(cls);
+  const volumeIcon = buildIcon("volumeFull", cls.icon);
+  volumeBtn.appendChild(volumeIcon);
+  volumeBtn.setAttribute("aria-label", "Mute");
+  const volumeSlider = div(cls.volumeSlider);
+  const volumeFill = div(cls.volumeFill);
+  volumeFill.style.width = "100%";
+  volumeSlider.appendChild(volumeFill);
+  volumeWrapper.appendChild(volumeBtn);
+  volumeWrapper.appendChild(volumeSlider);
+  controlsRight.appendChild(volumeWrapper);
+
+  const fullscreenBtn = iconButton(cls);
+  const fullscreenIcon = buildIcon("fullscreen", cls.icon);
+  fullscreenBtn.appendChild(fullscreenIcon);
+  fullscreenBtn.setAttribute("aria-label", "Fullscreen");
+  controlsRight.appendChild(fullscreenBtn);
+
+  controlsRow.appendChild(controlsLeft);
+
+  const statsRow = div(cls.telemetryRow);
   const statSpeed = document.createElement("span");
   statSpeed.className = cls.telemetrySpeed;
   statSpeed.textContent = "—";
@@ -145,48 +181,22 @@ export function buildPlayerElement(): PlayerElement {
   const statFrags = document.createElement("span");
   statFrags.className = cls.telemetryValue;
   statFrags.textContent = "—";
-  telemetryRow.appendChild(statSpeed);
-  telemetryRow.appendChild(teleSep1);
-  telemetryRow.appendChild(statBuf);
-  telemetryRow.appendChild(teleSep2);
-  telemetryRow.appendChild(statLvl);
-  telemetryRow.appendChild(teleSep3);
-  telemetryRow.appendChild(statFrags);
-  controlsRow.appendChild(telemetryRow);
+  statsRow.appendChild(statSpeed);
+  statsRow.appendChild(teleSep1);
+  statsRow.appendChild(statBuf);
+  statsRow.appendChild(teleSep2);
+  statsRow.appendChild(statLvl);
+  statsRow.appendChild(teleSep3);
+  statsRow.appendChild(statFrags);
+  controlsRow.appendChild(statsRow);
 
-  const menuWrap = div(cls.menuWrap);
-  const settingsBtn = iconButton(cls);
-  settingsBtn.appendChild(buildIcon("settings", cls.icon));
-  settingsBtn.setAttribute("aria-label", "Quality");
-  const menuPanel = div(cls.menu);
-  menuPanel.dataset.show = "false";
-  menuWrap.appendChild(settingsBtn);
-  menuWrap.appendChild(menuPanel);
-  controlsRow.appendChild(menuWrap);
+  controlsRow.appendChild(controlsRight);
 
-  const volumeWrapper = div(cls.volumeGroup);
-  const volumeBtn = iconButton(cls);
-  const volumeIcon = buildIcon("volumeFull", cls.icon);
-  volumeBtn.appendChild(volumeIcon);
-  volumeBtn.setAttribute("aria-label", "Mute");
-  const volumeSlider = div(cls.volumeSlider);
-  const volumeFill = div(cls.volumeFill);
-  volumeFill.style.width = "100%";
-  volumeSlider.appendChild(volumeFill);
-  volumeWrapper.appendChild(volumeBtn);
-  volumeWrapper.appendChild(volumeSlider);
-  controlsRow.appendChild(volumeWrapper);
-
-  const fullscreenBtn = iconButton(cls);
-  const fullscreenIcon = buildIcon("fullscreen", cls.icon);
-  fullscreenBtn.appendChild(fullscreenIcon);
-  fullscreenBtn.setAttribute("aria-label", "Fullscreen");
-  controlsRow.appendChild(fullscreenBtn);
-
-  bottomBar.appendChild(prepStatus);
   bottomBar.appendChild(seekWrap);
   bottomBar.appendChild(controlsRow);
-  root.appendChild(bottomBar);
+  stage.appendChild(bottomBar);
+
+  root.appendChild(stage);
 
   return {
     root,

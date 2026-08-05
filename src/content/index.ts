@@ -188,7 +188,7 @@ async function applyScene(settings: Settings): Promise<void> {
 
   if (settings.customPlayer) {
     const { showCustomPlayer } = await import("./custom-player");
-    showCustomPlayer();
+    await showCustomPlayer();
   } else if (
     isCustomPlayerMounted() ||
     document.getElementById(CUSTOM_PLAYER_HOST_ID)

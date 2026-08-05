@@ -2,8 +2,10 @@ import type Hls from "hls.js";
 
 type HlsConfigInput = NonNullable<ConstructorParameters<typeof Hls>[0]>;
 
-export const FORWARD_BUFFER_TARGET_SEC = 60;
-export const FORWARD_BUFFER_CAP_SEC = 60;
+export const FORWARD_BUFFER_TARGET_SEC = 30;
+export const FORWARD_BUFFER_CAP_SEC = 120;
+export const BACK_BUFFER_SEC = 90;
+export const MAX_BUFFER_BYTES = 600 * 1000 * 1000;
 
 export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   autoStartLoad: false,
@@ -15,8 +17,8 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   maxBufferLength: FORWARD_BUFFER_TARGET_SEC,
   maxMaxBufferLength: FORWARD_BUFFER_CAP_SEC,
   frontBufferFlushThreshold: Number.POSITIVE_INFINITY,
-  backBufferLength: Number.POSITIVE_INFINITY,
-  maxBufferSize: Number.POSITIVE_INFINITY,
+  backBufferLength: BACK_BUFFER_SEC,
+  maxBufferSize: MAX_BUFFER_BYTES,
   maxBufferHole: 0.5,
   highBufferWatchdogPeriod: 0.5,
   nudgeOffset: 0.1,
@@ -27,7 +29,7 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   liveDurationInfinity: false,
   enableWorker: true,
   enableSoftwareAES: true,
-  startFragPrefetch: false,
+  startFragPrefetch: true,
   testBandwidth: false,
   progressive: true,
   lowLatencyMode: false,
@@ -45,8 +47,6 @@ export const CUSTOM_PLAYER_HLS_CONFIG: Partial<HlsConfigInput> = {
   abrBandWidthFactor: 0.95,
   abrBandWidthUpFactor: 0.7,
   abrMaxWithRealBitrate: false,
-  maxStarvationDelay: 0,
-  maxLoadingDelay: 0,
   minAutoBitrate: 0,
   fragLoadPolicy: {
     default: {

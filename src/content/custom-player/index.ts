@@ -1,7 +1,7 @@
 import contentStyles from "../../content-styles.css?inline";
 import { setCustomPlayerDomRefs } from "../custom-player-mount-state";
 import { CUSTOM_PLAYER_HOST_ID } from "../dom-markers";
-import { findPlayerIframe } from "../player-iframe";
+import { waitForPlayerIframe } from "../player-iframe";
 import { createPlayerController, type PlayerController } from "./controller";
 
 export { getCustomPlayerHostElement, getCustomPlayerIframeRef, isCustomPlayerMounted } from "../custom-player-mount-state";
@@ -17,10 +17,14 @@ type Mounted = {
 
 let mounted: Mounted | null = null;
 
-export function showCustomPlayer(): void {
+export async function showCustomPlayer(): Promise<void> {
   if (mounted) return;
-  const iframe = findPlayerIframe();
-  if (!iframe) return;
+  let iframe: HTMLIFrameElement;
+  try {
+    iframe = await waitForPlayerIframe();
+  } catch {
+    return;
+  }
   const parent = iframe.parentElement;
   if (!parent) return;
   const nextSibling = iframe.nextSibling;

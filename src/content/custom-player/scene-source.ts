@@ -29,6 +29,7 @@ type IframeParams = {
   streamType: string;
   sceneId: number;
   itemId: number;
+  signed: boolean;
 };
 
 type VerifyStream = {
@@ -51,26 +52,51 @@ type VerifyResponse = {
   item_detail?: { front_cover?: string };
 };
 
+function normalizeStreamType(type: string | null): string {
+  const lower = (type ?? "scene").toLowerCase();
+  if (lower === "previewscene") return "preview";
+  if (lower === "movie") return "VOD";
+  return type ?? "scene";
+}
+
+function isUnsignedStreamType(type: string): boolean {
+  const lower = type.toLowerCase();
+  return lower === "preview" || lower === "trailer";
+}
+
 function parseIframeParams(iframe: HTMLIFrameElement): IframeParams | null {
   if (!iframe.src) return null;
   const url = new URL(iframe.src);
-  const apiKey = url.searchParams.get("site");
-  const key = url.searchParams.get("key");
-  const sig = url.searchParams.get("sig");
-  const timestamp = url.searchParams.get("timestamp");
-  const type = url.searchParams.get("type") ?? "scene";
   const sceneId = Number(url.searchParams.get("scene_id"));
   const itemId = Number(url.searchParams.get("item_id"));
-  if (!apiKey || !key || !sig || !timestamp) return null;
   if (!Number.isFinite(sceneId) || !Number.isFinite(itemId)) return null;
+  const streamType = normalizeStreamType(url.searchParams.get("type"));
+  const apiKey = url.searchParams.get("site") ?? "";
+  const key = url.searchParams.get("key") ?? "";
+  const sig = url.searchParams.get("sig") ?? "";
+  const timestamp = url.searchParams.get("timestamp") ?? "";
+  if (isUnsignedStreamType(streamType)) {
+    return {
+      apiKey,
+      encryptedCustomerId: "",
+      signature: "",
+      timestamp: "",
+      streamType,
+      sceneId,
+      itemId,
+      signed: false,
+    };
+  }
+  if (!apiKey || !key || !sig || !timestamp) return null;
   return {
     apiKey,
     encryptedCustomerId: key,
     signature: sig,
     timestamp,
-    streamType: type,
+    streamType,
     sceneId,
     itemId,
+    signed: true,
   };
 }
 
@@ -80,23 +106,26 @@ export async function loadSceneSource(
 ): Promise<SceneSource> {
   const params = parseIframeParams(iframe);
   if (!params) throw new Error("Player iframe URL is missing required parameters.");
-  const body = {
+  const body: Record<string, unknown> = {
     item_id: params.itemId,
-    encrypted_customer_id: params.encryptedCustomerId,
-    signature: params.signature,
-    timestamp: params.timestamp,
     stream_type: params.streamType,
     initiate_tracking: false,
     forcehd: false,
     scene_id: params.sceneId,
   };
+  if (params.signed) {
+    body.encrypted_customer_id = params.encryptedCustomerId;
+    body.signature = params.signature;
+    body.timestamp = params.timestamp;
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (params.apiKey) headers.api_key = params.apiKey;
   const response = await fetch(VERIFY_ENDPOINT, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "api_key": params.apiKey,
-    },
+    headers,
     body: JSON.stringify(body),
     signal,
   });
