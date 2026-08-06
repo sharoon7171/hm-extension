@@ -19,3 +19,6 @@ dist
 .firebase
 firebase-debug.log
 firestore-debug.log
+
+# Scratch
+tmp

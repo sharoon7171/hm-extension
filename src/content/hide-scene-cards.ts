@@ -7,6 +7,7 @@ import {
 import { matchFavoriteClipsPage } from "./url-patterns";
 
 const HIDE_ATTR = "data-hotmovies-hide-card";
+const FAV_ATTR = "data-hotmovies-fav-card";
 const STYLE_ID = "hotmovies-ext-hide-card-style";
 const COLUMN_RE = /\bcol(?:-(?:xs|sm|md|lg|xl|xxl))?-\d+\b/;
 const SCENE_CLIP_HREF_RE =
@@ -14,10 +15,10 @@ const SCENE_CLIP_HREF_RE =
 const CARD_ROOT_RE =
   /\b(?:grid|product|scene|clip|card|thumb|item|tile|box|result)\b/i;
 
-const enabled: Record<SceneCacheKind, boolean> = {
-  favorite: false,
-  hidden: false,
-};
+type FavoriteMode = "off" | "hide" | "highlight";
+
+let favoriteMode: FavoriteMode = "off";
+let hideHidden = false;
 
 const subscribed: Record<SceneCacheKind, boolean> = {
   favorite: false,
@@ -32,16 +33,20 @@ let scheduled = false;
 let started = false;
 let lifecycleInstalled = false;
 
-export function setHideCardsConfig(config: { favorite: boolean; hidden: boolean }): void {
-  enabled.favorite = config.favorite;
-  enabled.hidden = config.hidden;
-  if (!enabled.favorite && !enabled.hidden) {
+export function setHideCardsConfig(config: {
+  favorite: FavoriteMode;
+  hidden: boolean;
+}): void {
+  favoriteMode = config.favorite;
+  hideHidden = config.hidden;
+  const needFavorite = favoriteMode !== "off";
+  if (!needFavorite && !hideHidden) {
     teardown();
     return;
   }
   ensureStarted();
-  syncSubscription("favorite", config.favorite);
-  syncSubscription("hidden", config.hidden);
+  syncSubscription("favorite", needFavorite);
+  syncSubscription("hidden", hideHidden);
   refreshAllCards();
 }
 
@@ -60,8 +65,11 @@ function teardown(): void {
   domObserver = null;
   document.getElementById(STYLE_ID)?.remove();
   document
-    .querySelectorAll<HTMLElement>(`[${HIDE_ATTR}="true"]`)
-    .forEach(el => el.removeAttribute(HIDE_ATTR));
+    .querySelectorAll<HTMLElement>(`[${HIDE_ATTR}],[${FAV_ATTR}]`)
+    .forEach(el => {
+      el.removeAttribute(HIDE_ATTR);
+      el.removeAttribute(FAV_ATTR);
+    });
 }
 
 function ensureStarted(): void {
@@ -104,7 +112,16 @@ function injectStyle(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
-  style.textContent = `[${HIDE_ATTR}="true"] { display: none !important; }`;
+  style.textContent = [
+    `[${HIDE_ATTR}="true"] { display: none !important; }`,
+    `[${FAV_ATTR}="true"] {`,
+    "  outline: 3px solid #e11d48 !important;",
+    "  outline-offset: 3px !important;",
+    "  box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.35), 0 0 18px rgba(225, 29, 72, 0.55) !important;",
+    "  border-radius: 6px !important;",
+    "  background-color: rgba(225, 29, 72, 0.12) !important;",
+    "}",
+  ].join("\n");
   (document.head ?? document.documentElement).appendChild(style);
 }
 
@@ -147,39 +164,41 @@ function scheduleRefresh(): void {
   });
 }
 
-function shouldHide(id: string): boolean {
+function isFavorited(id: string): boolean {
+  return Boolean(favoriteStorage && id in favoriteStorage.scenes);
+}
+
+function cardState(id: string): "hide" | "highlight" | "none" {
+  if (hideHidden && hiddenStorage && id in hiddenStorage.scenes) return "hide";
   if (
-    enabled.favorite &&
-    favoriteStorage &&
-    id in favoriteStorage.scenes &&
+    favoriteMode !== "off" &&
+    isFavorited(id) &&
     !matchFavoriteClipsPage(location.href)
   ) {
-    return true;
+    return favoriteMode === "hide" ? "hide" : "highlight";
   }
-  if (enabled.hidden && hiddenStorage && id in hiddenStorage.scenes) return true;
-  return false;
+  return "none";
 }
 
 function refreshAllCards(): void {
   if (!started) return;
   const seen = new Set<HTMLElement>();
-  const hideFor = (id: string) => shouldHide(id);
+  const apply = (el: HTMLElement, id: string) => {
+    if (seen.has(el)) return;
+    seen.add(el);
+    applyState(el, cardState(id));
+  };
   const gridCards = document.querySelectorAll<HTMLElement>("[data-scene-id]");
   for (const el of gridCards) {
     const id = el.dataset.sceneId;
     if (!id) continue;
-    const root = closestColumn(el) ?? el;
-    if (seen.has(root)) continue;
-    seen.add(root);
-    applyHide(root, hideFor(id));
+    apply(closestColumn(el) ?? el, id);
   }
   const movieScenes = document.querySelectorAll<HTMLElement>(".movie__scenes__scene");
   for (const el of movieScenes) {
     const id = sceneIdFromMovieScene(el);
     if (!id) continue;
-    if (seen.has(el)) continue;
-    seen.add(el);
-    applyHide(el, hideFor(id));
+    apply(el, id);
   }
   const clipLinks = document.querySelectorAll<HTMLAnchorElement>(
     'a[href*="/adult-clips/"], a[href*="-porn-video.html"]',
@@ -188,18 +207,23 @@ function refreshAllCards(): void {
     const id = sceneIdFromHref(link.getAttribute("href") ?? "");
     if (!id) continue;
     const root = cardRootForLink(link);
-    if (!root || seen.has(root)) continue;
-    seen.add(root);
-    applyHide(root, hideFor(id));
+    if (!root) continue;
+    apply(root, id);
   }
 }
 
-function applyHide(el: HTMLElement, hide: boolean): void {
-  if (hide) {
+function applyState(el: HTMLElement, state: "hide" | "highlight" | "none"): void {
+  if (state === "hide") {
     if (el.getAttribute(HIDE_ATTR) !== "true") el.setAttribute(HIDE_ATTR, "true");
+    if (el.hasAttribute(FAV_ATTR)) el.removeAttribute(FAV_ATTR);
     return;
   }
   if (el.hasAttribute(HIDE_ATTR)) el.removeAttribute(HIDE_ATTR);
+  if (state === "highlight") {
+    if (el.getAttribute(FAV_ATTR) !== "true") el.setAttribute(FAV_ATTR, "true");
+    return;
+  }
+  if (el.hasAttribute(FAV_ATTR)) el.removeAttribute(FAV_ATTR);
 }
 
 function sceneIdFromHref(href: string): string | null {

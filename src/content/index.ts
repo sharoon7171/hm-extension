@@ -23,6 +23,10 @@ import {
   hideFavoriteButtonHighlight,
   showFavoriteButtonHighlight,
 } from "./favorite-button-highlight";
+import {
+  disableFavoriteClipsClear,
+  enableFavoriteClipsClear,
+} from "./favorite-clips-clear";
 import { hideFullWidthPlayer, showFullWidthPlayer } from "./full-width-player";
 import { hidePromoBanners, showPromoBanners } from "./hide-promo-banners";
 import { setHideCardsConfig } from "./hide-scene-cards";
@@ -51,7 +55,12 @@ import {
 } from "./site-footer";
 import { hideStarBio, showStarBio } from "./star-page-bio";
 import { hideStudioPageLink, showStudioPageLink } from "./studio-page-link";
-import { matchScenePage, matchStarPage, matchStudioPage } from "./url-patterns";
+import {
+  matchFavoriteClipsPage,
+  matchScenePage,
+  matchStarPage,
+  matchStudioPage,
+} from "./url-patterns";
 
 let observer: MutationObserver | null = null;
 
@@ -67,6 +76,7 @@ async function run(): Promise<void> {
   applyStar(settings);
   applySceneFavoriteSync();
   applySceneHideButton();
+  applyFavoriteClipsClear();
   applyAutoFavoriteScene(settings);
   applyAutoHideScene(settings);
   if (!matchScenePage(location.href)) {
@@ -112,7 +122,11 @@ function applyGlobal(settings: Settings): void {
   if (settings.favoriteButtonHighlight) showFavoriteButtonHighlight();
   else hideFavoriteButtonHighlight();
   setHideCardsConfig({
-    favorite: settings.hideFavoritedScenes,
+    favorite: settings.hideFavoritedScenes
+      ? "hide"
+      : settings.highlightFavoritedScenes
+        ? "highlight"
+        : "off",
     hidden: settings.hideCustomScenes,
   });
 }
@@ -180,6 +194,11 @@ function applySceneHideButton(): void {
     return;
   }
   startSceneHideButton(scene.sceneId);
+}
+
+function applyFavoriteClipsClear(): void {
+  if (matchFavoriteClipsPage(location.href)) enableFavoriteClipsClear();
+  else disableFavoriteClipsClear();
 }
 
 async function applyScene(settings: Settings): Promise<void> {

@@ -15,6 +15,7 @@ export type Settings = {
   autoRedirectStarToClips: boolean;
   favoriteButtonHighlight: boolean;
   hideFavoritedScenes: boolean;
+  highlightFavoritedScenes: boolean;
   hideCustomScenes: boolean;
   autoHideScene: boolean;
   customPlayer: boolean;
@@ -37,6 +38,7 @@ const DEFAULTS: Settings = {
   autoRedirectStarToClips: true,
   favoriteButtonHighlight: true,
   hideFavoritedScenes: false,
+  highlightFavoritedScenes: false,
   hideCustomScenes: false,
   autoHideScene: false,
   customPlayer: false,
