@@ -198,7 +198,10 @@ export function createPlayerController(): PlayerController {
       if (data.fatal) {
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           if (playbackEverStarted) {
-            hls?.startLoad(ui.video.currentTime);
+            window.setTimeout(() => {
+              if (destroyed || !hls) return;
+              resumeLoadingAtPlayhead();
+            }, 800);
           } else {
             showError(ui, `Playback error: ${data.details}`);
           }
@@ -216,6 +219,17 @@ export function createPlayerController(): PlayerController {
         playbackEverStarted
       ) {
         resumeLoadingAtPlayhead();
+      } else if (
+        playbackEverStarted &&
+        (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR ||
+          data.details === Hls.ErrorDetails.FRAG_LOAD_TIMEOUT)
+      ) {
+        window.setTimeout(() => {
+          if (destroyed || !hls) return;
+          if (!isPlaybackBuffered(ui.video, ui.video.currentTime, 1)) {
+            resumeLoadingAtPlayhead();
+          }
+        }, 500);
       }
     });
   };
