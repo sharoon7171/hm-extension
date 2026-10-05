@@ -366,6 +366,10 @@ export function createPlayerController(): PlayerController {
       event.stopPropagation();
       void toggleRecording();
     });
+    ui.buttons.recordPause.addEventListener("click", event => {
+      event.stopPropagation();
+      toggleRecordPause();
+    });
     ui.buttons.settings.addEventListener("click", event => {
       event.stopPropagation();
       menu?.toggle();
@@ -567,12 +571,16 @@ export function createPlayerController(): PlayerController {
     } else if (event.key === "r" && recordingEnabled) {
       event.preventDefault();
       void toggleRecording();
+    } else if (event.key === "p" && recordingEnabled && recorder.isRecording()) {
+      event.preventDefault();
+      toggleRecordPause();
     }
   };
 
   const syncRecordButton = (): void => {
     ui.buttons.record.hidden = !recordingEnabled;
     const active = recorder.isRecording();
+    const paused = recorder.isPaused();
     ui.buttons.record.dataset.recording = String(active);
     ui.buttons.recordIcon.replaceWith(
       buildIcon(active ? "recordStop" : "record", cls.icon),
@@ -581,6 +589,19 @@ export function createPlayerController(): PlayerController {
     if (next) ui.buttons.recordIcon = next as SVGSVGElement;
     ui.buttons.record.setAttribute("aria-label", active ? "Stop recording" : "Record");
     ui.buttons.record.disabled = recordBusy;
+
+    ui.buttons.recordPause.hidden = !recordingEnabled || !active;
+    ui.buttons.recordPause.dataset.paused = String(paused);
+    ui.buttons.recordPauseIcon.replaceWith(
+      buildIcon(paused ? "play" : "pause", cls.icon),
+    );
+    const pauseIcon = ui.buttons.recordPause.querySelector("svg");
+    if (pauseIcon) ui.buttons.recordPauseIcon = pauseIcon as SVGSVGElement;
+    ui.buttons.recordPause.setAttribute(
+      "aria-label",
+      paused ? "Resume recording" : "Pause recording",
+    );
+    ui.buttons.recordPause.disabled = recordBusy;
   };
 
   const toggleRecording = async (): Promise<void> => {
@@ -590,6 +611,13 @@ export function createPlayerController(): PlayerController {
       return;
     }
     await startRecording();
+  };
+
+  const toggleRecordPause = (): void => {
+    if (!recordingEnabled || recordBusy || !recorder.isRecording()) return;
+    if (recorder.isPaused()) recorder.resume();
+    else recorder.pause();
+    syncRecordButton();
   };
 
   const startRecording = async (): Promise<void> => {
