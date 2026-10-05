@@ -73,6 +73,22 @@ const ICONS: Record<string, IconBuilder> = {
     p.setAttribute("d", "M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z");
     svg.appendChild(p);
   },
+  record: svg => {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", "12");
+    c.setAttribute("cy", "12");
+    c.setAttribute("r", "6");
+    svg.appendChild(c);
+  },
+  recordStop: svg => {
+    const r = document.createElementNS(NS, "rect");
+    r.setAttribute("x", "7");
+    r.setAttribute("y", "7");
+    r.setAttribute("width", "10");
+    r.setAttribute("height", "10");
+    r.setAttribute("rx", "1");
+    svg.appendChild(r);
+  },
 };
 
 export function buildIcon(name: keyof typeof ICONS, className?: string): SVGSVGElement {

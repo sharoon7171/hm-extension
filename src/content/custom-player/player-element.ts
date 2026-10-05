@@ -29,6 +29,8 @@ export type PlayerElement = {
     skipForward: HTMLButtonElement;
     volume: HTMLButtonElement;
     volumeIcon: SVGSVGElement;
+    record: HTMLButtonElement;
+    recordIcon: SVGSVGElement;
     settings: HTMLButtonElement;
     fullscreen: HTMLButtonElement;
     fullscreenIcon: SVGSVGElement;
@@ -134,6 +136,14 @@ export function buildPlayerElement(): PlayerElement {
   controlsLeft.appendChild(sep);
   controlsLeft.appendChild(totalTime);
 
+  const recordBtn = iconButton(cls);
+  const recordIcon = buildIcon("record", cls.icon);
+  recordBtn.appendChild(recordIcon);
+  recordBtn.setAttribute("aria-label", "Record");
+  recordBtn.dataset.recording = "false";
+  recordBtn.hidden = true;
+  controlsRight.appendChild(recordBtn);
+
   const menuWrap = div(cls.menuWrap);
   const settingsBtn = iconButton(cls);
   settingsBtn.appendChild(buildIcon("settings", cls.icon));
@@ -226,6 +236,8 @@ export function buildPlayerElement(): PlayerElement {
       skipForward: skipFwdBtn,
       volume: volumeBtn,
       volumeIcon,
+      record: recordBtn,
+      recordIcon,
       settings: settingsBtn,
       fullscreen: fullscreenBtn,
       fullscreenIcon,

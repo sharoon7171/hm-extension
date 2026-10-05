@@ -27,7 +27,7 @@ export const playerClasses = {
   controlsLeft: "flex shrink-0 items-center gap-0.5",
   controlsRight: "ml-auto flex shrink-0 items-center gap-0.5",
   iconBtn:
-    "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/45 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_2px_6px_rgba(0,0,0,0.55)] backdrop-blur-[2px] hover:bg-black/65 hover:text-white",
+    "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/45 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_2px_6px_rgba(0,0,0,0.55)] backdrop-blur-[2px] hover:bg-black/65 hover:text-white data-[recording=true]:bg-[#e02020]/90 data-[recording=true]:text-white data-[recording=true]:shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_0_10px_rgba(224,32,32,0.55)] data-[recording=true]:hover:bg-[#e02020]",
   icon: "h-[18px] w-[18px] fill-current drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]",
   time: "shrink-0 tabular-nums text-[12px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]",
   timeSep: "shrink-0 px-0.5 text-[12px] font-bold text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]",
