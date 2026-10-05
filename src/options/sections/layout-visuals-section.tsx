@@ -35,7 +35,7 @@ export function LayoutVisualsSection({
       />
       <ToggleRow
         title="Video recording"
-        hint={`${EXTENSION_DISPLAY_NAME} adds a record control on the custom player. It records the exact frames at the quality you are watching, then saves an MP4 when you stop. Requires Custom HLS player.`}
+        hint={`${EXTENSION_DISPLAY_NAME} adds record controls on the custom player. Record the quality you are watching, pause to skip ahead, resume, then stop to save an MP4. Requires Custom HLS player.`}
         checked={settings.videoRecording}
         onToggle={() => {
           const next = !settings.videoRecording;
