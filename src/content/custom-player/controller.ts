@@ -1,11 +1,13 @@
 import Hls from "hls.js";
 import type { Level } from "hls.js";
+import { getSettings, onSettingsChanged } from "../../shared/settings";
+import { playerClasses as cls } from "../../ui-classes/player";
 import { createBandwidthLock, type BandwidthLock } from "./bandwidth-lock";
-import { buildIcon } from "./icons";
+import { isPlaybackBuffered } from "./buffer-range";
 import { formatBytes, formatBytesPerSecond, formatTimecode } from "./format";
 import { CUSTOM_PLAYER_HLS_CONFIG } from "./hls-config";
+import { buildIcon } from "./icons";
 import { createMetricsLoader } from "./metrics-loader";
-import { isPlaybackBuffered } from "./buffer-range";
 import { buildPlayerElement, type PlayerElement } from "./player-element";
 import {
   clampLevelIndex,
@@ -14,9 +16,9 @@ import {
   findLevelIndexByHeight,
   type QualityMenu,
 } from "./quality-menu";
+import { createVideoRecorder } from "./recorder";
 import { loadSceneSource, type SceneSource } from "./scene-source";
 import { SpeedTracker } from "./speed-tracker";
-import { playerClasses as cls } from "../../ui-classes/player";
 
 const STATS_INTERVAL_MS = 500;
 const QUALITY_PREF_KEY = "hm-custom-player-quality";
@@ -73,6 +75,7 @@ export function createPlayerController(): PlayerController {
     ui.stats.speed.textContent = formatBytesPerSecond(bps);
   });
   const abort = new AbortController();
+  const recorder = createVideoRecorder();
   let hls: Hls | null = null;
   let menu: QualityMenu | null = null;
   let statsTimer: number | null = null;
@@ -86,6 +89,21 @@ export function createPlayerController(): PlayerController {
   let chipBufferingActive = false;
   let lock: BandwidthLock | null = null;
   let fullscreenUiListener: (() => void) | null = null;
+  let recordingEnabled = false;
+  let recordingAudio = true;
+  let recordBusy = false;
+  const unsubSettings = onSettingsChanged(settings => {
+    recordingEnabled = settings.videoRecording;
+    recordingAudio = settings.videoRecordingAudio;
+    if (!recordingEnabled && recorder.isRecording()) void stopRecording();
+    syncRecordButton();
+  });
+  void getSettings().then(settings => {
+    if (destroyed) return;
+    recordingEnabled = settings.videoRecording;
+    recordingAudio = settings.videoRecordingAudio;
+    syncRecordButton();
+  });
   const syncPrepChip = (): void => {
     const preparing = !manifestParsed;
     const buffering = playbackEverStarted && chipBufferingActive;
@@ -118,6 +136,8 @@ export function createPlayerController(): PlayerController {
 
   const destroy = (): void => {
     destroyed = true;
+    unsubSettings();
+    recorder.destroy();
     if (isPlayerFullscreen(ui)) exitDocumentFullscreen(document);
     abort.abort();
     if (statsTimer !== null) window.clearInterval(statsTimer);
@@ -327,6 +347,7 @@ export function createPlayerController(): PlayerController {
     ui.video.addEventListener("ended", () => {
       setPlayIcon(false);
       ui.bigPlay.dataset.show = "true";
+      if (recorder.isRecording()) void stopRecording();
     });
 
     ui.buttons.skipBackward.addEventListener("click", event => {
@@ -341,6 +362,10 @@ export function createPlayerController(): PlayerController {
     wireSeek();
     wireVolume();
 
+    ui.buttons.record.addEventListener("click", event => {
+      event.stopPropagation();
+      void toggleRecording();
+    });
     ui.buttons.settings.addEventListener("click", event => {
       event.stopPropagation();
       menu?.toggle();
@@ -539,7 +564,89 @@ export function createPlayerController(): PlayerController {
       toggleFullscreen();
     } else if (event.key === "m") {
       ui.video.muted = !ui.video.muted;
+    } else if (event.key === "r" && recordingEnabled) {
+      event.preventDefault();
+      void toggleRecording();
     }
+  };
+
+  const syncRecordButton = (): void => {
+    ui.buttons.record.hidden = !recordingEnabled;
+    const active = recorder.isRecording();
+    ui.buttons.record.dataset.recording = String(active);
+    ui.buttons.recordIcon.replaceWith(
+      buildIcon(active ? "recordStop" : "record", cls.icon),
+    );
+    const next = ui.buttons.record.querySelector("svg");
+    if (next) ui.buttons.recordIcon = next as SVGSVGElement;
+    ui.buttons.record.setAttribute("aria-label", active ? "Stop recording" : "Record");
+    ui.buttons.record.disabled = recordBusy;
+  };
+
+  const toggleRecording = async (): Promise<void> => {
+    if (!recordingEnabled || recordBusy) return;
+    if (recorder.isRecording()) {
+      await stopRecording();
+      return;
+    }
+    await startRecording();
+  };
+
+  const startRecording = async (): Promise<void> => {
+    if (!recordingEnabled || destroyed || recordBusy || recorder.isRecording()) return;
+    recordBusy = true;
+    syncRecordButton();
+    menu?.close();
+    try {
+      await recorder.start({
+        video: ui.video,
+        includeAudio: recordingAudio,
+        sourceVideoBitrate: currentPlayingBitrate(),
+      });
+    } catch (error) {
+      flashStatus(
+        error instanceof Error ? error.message : "Failed to start recording.",
+      );
+    } finally {
+      recordBusy = false;
+      if (!recordingEnabled && recorder.isRecording()) void stopRecording();
+      else syncRecordButton();
+    }
+  };
+
+  const stopRecording = async (): Promise<void> => {
+    if (recordBusy) return;
+    recordBusy = true;
+    syncRecordButton();
+    try {
+      await recorder.stop();
+    } finally {
+      recordBusy = false;
+      syncRecordButton();
+    }
+  };
+
+  const flashStatus = (message: string): void => {
+    ui.prepLabel.textContent = message;
+    ui.prepStatus.dataset.show = "true";
+    window.setTimeout(() => {
+      if (!destroyed) syncPrepChip();
+    }, 2800);
+  };
+
+  const currentPlayingBitrate = (): number => {
+    if (hls && hls.levels.length > 0) {
+      const levelIndex =
+        hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel;
+      const level = levelIndex >= 0 ? hls.levels[levelIndex] : null;
+      if (level?.bitrate) return level.bitrate;
+    }
+    const height = ui.video.videoHeight;
+    if (!source || source.streams.length === 0 || height <= 0) return 0;
+    for (const stream of source.streams) {
+      if (stream.height === height) return stream.videoBitrate;
+    }
+    return 0;
   };
 
   const updateStats = (): void => {
