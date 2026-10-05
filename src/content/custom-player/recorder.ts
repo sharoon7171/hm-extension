@@ -15,7 +15,10 @@ export type RecorderStartOptions = {
 
 export type VideoRecorder = {
   isRecording(): boolean;
+  isPaused(): boolean;
   start(options: RecorderStartOptions): Promise<void>;
+  pause(): void;
+  resume(): void;
   stop(): Promise<void>;
   destroy(): void;
 };
@@ -29,6 +32,8 @@ export function createVideoRecorder(): VideoRecorder {
 
   const isRecording = (): boolean =>
     mediaRecorder !== null && mediaRecorder.state !== "inactive";
+
+  const isPaused = (): boolean => mediaRecorder?.state === "paused";
 
   const start = async (options: RecorderStartOptions): Promise<void> => {
     if (isRecording()) return;
@@ -103,6 +108,25 @@ export function createVideoRecorder(): VideoRecorder {
     }
   };
 
+  const pause = (): void => {
+    const recorder = mediaRecorder;
+    if (!recorder || recorder.state !== "recording") return;
+    try {
+      recorder.requestData();
+      recorder.pause();
+    } catch {
+    }
+  };
+
+  const resume = (): void => {
+    const recorder = mediaRecorder;
+    if (!recorder || recorder.state !== "paused") return;
+    try {
+      recorder.resume();
+    } catch {
+    }
+  };
+
   const stop = async (): Promise<void> => {
     const recorder = mediaRecorder;
     if (!recorder || recorder.state === "inactive") {
@@ -135,7 +159,7 @@ export function createVideoRecorder(): VideoRecorder {
     stopPromise = null;
   };
 
-  return { isRecording, start, stop, destroy };
+  return { isRecording, isPaused, start, pause, resume, stop, destroy };
 }
 
 function pickMimeType(withAudio: boolean): string {
