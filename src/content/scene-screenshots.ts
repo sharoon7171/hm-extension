@@ -14,8 +14,15 @@ const PLAYER_IFRAME_SELECTOR = 'iframe[src*="adultempire.com/gw/player"]';
 const PREVIEW_WIDTH = 480;
 const FULLSIZE_WIDTH = 1280;
 const TARGET_FRAME_COUNT = 48;
+const FRAME_TC_STEP = 10;
 
-const OG_IMAGE_RE = /caps\d*cdn\.adultempire\.com\/(?:r\/\d+\/)?\d+\/(\d+)_/;
+const OG_CAPS_MASTER_RE = /caps\d*cdn\.adultempire\.com\/(?:r\/\d+\/)?\d+\/(\d+)_/;
+const OG_FRAME_RE =
+  /^(https?:\/\/imgs\d*cdn\.adultempire\.com)\/frame\/(\d+)(?:[?#]|$)/i;
+const FRAME_URL_RE =
+  /^(https?:\/\/imgs\d*cdn\.adultempire\.com\/frame\/\d+)(?:\?([^#]*))?$/i;
+const ISO_DURATION_RE =
+  /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)(?:\.\d+)?S)?$/i;
 const WEBVTT_TS =
   /\d{2}:\d{2}:\d{2}(?:[.,]\d{1,3})?|\d{1,2}:\d{2}(?:[.,]\d{1,3})?/;
 const WEBVTT_CUE_LINE_RE = new RegExp(
@@ -27,7 +34,14 @@ const CAPS_N_PATH_THUMB_RE =
 
 const HOTMOVIES_ORIGIN = "https://www.hotmovies.com";
 
-type ItemRefs = { itemId: string; sceneId: string; masterId: string | null };
+type ItemRefs = {
+  itemId: string;
+  sceneId: string;
+  masterId: string | null;
+  frameHost: string | null;
+  frameId: string | null;
+  durationSeconds: number | null;
+};
 type ThumbnailCue = { startSeconds: number; endSeconds: number; url: string };
 
 const classes = {
@@ -76,12 +90,64 @@ function extractItemRefs(): ItemRefs | null {
   const og = document.querySelector<HTMLMetaElement>(
     'meta[property="og:image"], meta[name="og:image"]',
   );
-  const masterMatch = og?.content.match(OG_IMAGE_RE);
+  const ogContent = og?.content ?? "";
+  const masterMatch = ogContent.match(OG_CAPS_MASTER_RE);
+  const frameMatch = ogContent.match(OG_FRAME_RE);
   return {
     itemId,
     sceneId,
     masterId: masterMatch ? masterMatch[1] : null,
+    frameHost: frameMatch ? frameMatch[1] : null,
+    frameId: frameMatch ? frameMatch[2] : null,
+    durationSeconds: extractDurationSeconds(),
   };
+}
+
+function extractDurationSeconds(): number | null {
+  for (const script of document.querySelectorAll(
+    'script[type="application/ld+json"]',
+  )) {
+    const raw = script.textContent?.trim();
+    if (!raw) continue;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      const found = findIsoDuration(parsed);
+      if (found !== null) return found;
+    } catch {
+    }
+  }
+  return null;
+}
+
+function findIsoDuration(value: unknown): number | null {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = findIsoDuration(entry);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.duration === "string") {
+    const seconds = parseIsoDurationSeconds(record.duration);
+    if (seconds !== null) return seconds;
+  }
+  for (const nested of Object.values(record)) {
+    const found = findIsoDuration(nested);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function parseIsoDurationSeconds(raw: string): number | null {
+  const m = raw.trim().match(ISO_DURATION_RE);
+  if (!m) return null;
+  const hours = Number(m[1] ?? 0);
+  const minutes = Number(m[2] ?? 0);
+  const seconds = Number(m[3] ?? 0);
+  const total = hours * 3600 + minutes * 60 + seconds;
+  return total > 0 ? total : null;
 }
 
 function normalizeWebVttTiming(value: string): string {
@@ -189,7 +255,7 @@ function extractRetailTitleUrl(itemId: string): string | null {
 function cuesFromRetailDom(root: ParentNode): ThumbnailCue[] {
   type Draft = { url: string; tc: number | null };
   const imgs = [...root.querySelectorAll<HTMLImageElement>(
-    '.scene-screenshot-container img[src*="caps"]',
+    ".scene-screenshot-container img[src]",
   )];
   const seenUrl = new Set<string>();
   const drafts: Draft[] = [];
@@ -271,7 +337,55 @@ async function resolveSceneScreenshots(
 ): Promise<ThumbnailCue[]> {
   const fromVtt = await fetchSceneThumbnails(refs, signal);
   if (fromVtt.length > 0) return fromVtt;
+  const fromFrames = cuesFromFrameTimeline(refs);
+  if (fromFrames.length > 0) return fromFrames;
   return fetchRetailScreenshotCues(refs.itemId, signal);
+}
+
+function cuesFromFrameTimeline(refs: ItemRefs): ThumbnailCue[] {
+  if (!refs.frameHost || !refs.frameId || refs.durationSeconds === null) {
+    return [];
+  }
+  const timecodes = sampleFrameTimecodes(refs.durationSeconds, TARGET_FRAME_COUNT);
+  return timecodes.map(tc => ({
+    startSeconds: tc,
+    endSeconds: tc + FRAME_TC_STEP,
+    url: frameUrl(refs.frameHost!, refs.frameId!, PREVIEW_WIDTH, tc),
+  }));
+}
+
+function sampleFrameTimecodes(
+  durationSeconds: number,
+  count: number,
+): number[] {
+  const first = FRAME_TC_STEP;
+  const last = Math.floor((durationSeconds - 1) / FRAME_TC_STEP) * FRAME_TC_STEP;
+  if (last < first) return [];
+  const total = Math.floor((last - first) / FRAME_TC_STEP) + 1;
+  if (total <= count) {
+    const all: number[] = new Array(total);
+    for (let i = 0; i < total; i += 1) all[i] = first + i * FRAME_TC_STEP;
+    return all;
+  }
+  const out: number[] = [];
+  let prev = -1;
+  for (let i = 0; i < count; i += 1) {
+    const idx = Math.round((i * (total - 1)) / (count - 1));
+    const tc = first + idx * FRAME_TC_STEP;
+    if (tc === prev) continue;
+    out.push(tc);
+    prev = tc;
+  }
+  return out;
+}
+
+function frameUrl(
+  host: string,
+  frameId: string,
+  width: number,
+  tc: number,
+): string {
+  return `${host}/frame/${frameId}?w=${width}&tc=${tc}`;
 }
 
 function parseVtt(text: string): ThumbnailCue[] {
@@ -317,6 +431,13 @@ function parseVtt(text: string): ThumbnailCue[] {
 }
 
 function upgradeThumbWidth(url: string, width: number): string {
+  const frame = url.match(FRAME_URL_RE);
+  if (frame) {
+    const base = frame[1];
+    const params = new URLSearchParams(frame[2] ?? "");
+    params.set("w", String(width));
+    return `${base}?${params.toString()}`;
+  }
   const nm = url.match(CAPS_N_PATH_THUMB_RE);
   if (nm) {
     const [, prefix, szRaw, basename] = nm;
