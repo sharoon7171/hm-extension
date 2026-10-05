@@ -34,6 +34,32 @@ export function LayoutVisualsSection({
         ariaLabel="Toggle custom HLS player"
       />
       <ToggleRow
+        title="Video recording"
+        hint={`${EXTENSION_DISPLAY_NAME} adds a record control on the custom player. It records the exact frames at the quality you are watching, then saves an MP4 when you stop. Requires Custom HLS player.`}
+        checked={settings.videoRecording}
+        onToggle={() => {
+          const next = !settings.videoRecording;
+          return update(
+            next
+              ? { videoRecording: true, customPlayer: true }
+              : { videoRecording: false },
+          );
+        }}
+        ariaLabel="Toggle video recording"
+      />
+      {settings.videoRecording ? (
+        <ToggleRow
+          title="Record audio"
+          hint="Include the scene audio track in recordings. Turn off for silent video-only files."
+          checked={settings.videoRecordingAudio}
+          onToggle={() =>
+            update({ videoRecordingAudio: !settings.videoRecordingAudio })
+          }
+          ariaLabel="Toggle record audio"
+          indented
+        />
+      ) : null}
+      <ToggleRow
         title="Scene screenshots"
         hint={`${EXTENSION_DISPLAY_NAME} embeds the per-scene timeline screenshot grid below the player so you can skim a scene without opening the carousel.`}
         checked={settings.screenshotsEnabled}
