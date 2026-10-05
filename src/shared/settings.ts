@@ -19,6 +19,8 @@ export type Settings = {
   hideCustomScenes: boolean;
   autoHideScene: boolean;
   customPlayer: boolean;
+  videoRecording: boolean;
+  videoRecordingAudio: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -42,6 +44,8 @@ const DEFAULTS: Settings = {
   hideCustomScenes: false,
   autoHideScene: false,
   customPlayer: false,
+  videoRecording: false,
+  videoRecordingAudio: true,
 };
 
 const KEYS = Object.keys(DEFAULTS) as (keyof Settings)[];
