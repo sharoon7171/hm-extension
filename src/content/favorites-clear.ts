@@ -1,17 +1,49 @@
 import type { AckResponse, SceneDeleteAllRequest } from "../shared/messages";
 
 const BUTTON_ID = "hotmovies-ext-clear-favorites";
-const FAV_TYPE_CLIP = 1;
 const CONCURRENCY = 8;
 const CONFIRM_MS = 4000;
+
+export type FavoritesClearKind = "clips" | "performers" | "studios";
+
+type FavoritesClearSpec = {
+  path: string;
+  favType: number;
+  idRe: RegExp;
+  clearCloud: boolean;
+};
+
+const SPECS: Record<FavoritesClearKind, FavoritesClearSpec> = {
+  clips: {
+    path: "/favorite-clips",
+    favType: 1,
+    idRe: /data-ta="view"\s+data-tl="scene"\s+data-tid="(\d+)"/g,
+    clearCloud: true,
+  },
+  performers: {
+    path: "/favorite-performers",
+    favType: 3,
+    idRe: /:data_tl="'performer'"\s*:data_tid="(\d+)"/g,
+    clearCloud: false,
+  },
+  studios: {
+    path: "/favorite-studios",
+    favType: 5,
+    idRe: /:data_tl="'studio'"\s*:data_tid="(\d+)"/g,
+    clearCloud: false,
+  },
+};
 
 const boundButtons = new WeakSet<HTMLButtonElement>();
 
 let waitObserver: MutationObserver | null = null;
+let activeKind: FavoritesClearKind | null = null;
 let busy = false;
 let armToken = 0;
 
-export function enableFavoriteClipsClear(): void {
+export function enableFavoritesClear(kind: FavoritesClearKind): void {
+  if (activeKind && activeKind !== kind) disableFavoritesClear();
+  activeKind = kind;
   ensureButton();
   if (waitObserver) return;
   waitObserver = new MutationObserver(() => {
@@ -23,15 +55,17 @@ export function enableFavoriteClipsClear(): void {
   });
 }
 
-export function disableFavoriteClipsClear(): void {
+export function disableFavoritesClear(): void {
   waitObserver?.disconnect();
   waitObserver = null;
+  activeKind = null;
   busy = false;
   armToken = 0;
   document.getElementById(BUTTON_ID)?.remove();
 }
 
 function ensureButton(): boolean {
+  if (!activeKind) return false;
   const sort = document.querySelector(".list__header__controls__sort");
   if (!sort) return false;
   let button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
@@ -57,7 +91,7 @@ function ensureButton(): boolean {
 }
 
 async function onClearClick(button: HTMLButtonElement): Promise<void> {
-  if (busy) return;
+  if (busy || !activeKind) return;
   if (button.dataset.armed !== "1") {
     const token = ++armToken;
     button.dataset.armed = "1";
@@ -75,8 +109,9 @@ async function onClearClick(button: HTMLButtonElement): Promise<void> {
   button.dataset.armed = "0";
   busy = true;
   button.disabled = true;
+  const spec = SPECS[activeKind];
   try {
-    const ids = await collectAllFavoriteIds(button);
+    const ids = await collectAllFavoriteIds(button, spec);
     if (ids.length === 0) {
       setStatus(button, "None found");
       await wait(900);
@@ -89,7 +124,7 @@ async function onClearClick(button: HTMLButtonElement): Promise<void> {
     setStatus(button, `Site 0/${ids.length}`);
     await mapPool(ids, CONCURRENCY, async id => {
       try {
-        await toggleFavoriteOff(id);
+        await toggleFavoriteOff(id, spec.favType);
       } catch {
         failed += 1;
       }
@@ -101,9 +136,11 @@ async function onClearClick(button: HTMLButtonElement): Promise<void> {
           : `Site ${done}/${ids.length}`,
       );
     });
-    setStatus(button, "Delete all…");
-    const deleted = await extensionDeleteAllFavorites();
-    if (!deleted.ok) throw new Error(deleted.error);
+    if (spec.clearCloud) {
+      setStatus(button, "Delete all…");
+      const deleted = await extensionDeleteAllFavorites();
+      if (!deleted.ok) throw new Error(deleted.error);
+    }
     setStatus(
       button,
       failed > 0 ? `Done · ${failed} site failed` : `Done · ${ids.length}`,
@@ -166,29 +203,41 @@ function extensionDeleteAllFavorites(): Promise<AckResponse> {
   });
 }
 
-function readMaxPage(): number {
-  const form = document.querySelector<HTMLFormElement>(
-    'form[onsubmit*="GoToPageNonAjax"]',
-  );
-  const match = form?.getAttribute("onsubmit")?.match(/,\s*(\d+)\s*\)/);
-  const max = match ? Number(match[1]) : 1;
-  return Number.isFinite(max) && max > 0 ? max : 1;
+function readMaxPage(html?: string): number {
+  const source =
+    html ??
+    document.querySelector<HTMLFormElement>(
+      'form[onsubmit*="GoToPageNonAjax"]',
+    )?.getAttribute("onsubmit") ??
+    "";
+  const match = source.match(/GoToPageNonAjax\([^,]+,[^,]+,\s*(\d+)\s*\)/);
+  if (match) {
+    const max = Number(match[1]);
+    if (Number.isFinite(max) && max > 0) return max;
+  }
+  let max = 1;
+  const linkSource = html ?? document.documentElement.innerHTML;
+  for (const page of linkSource.matchAll(/[?&]page=(\d+)/gi)) {
+    const value = Number(page[1]);
+    if (Number.isFinite(value) && value > max) max = value;
+  }
+  return max;
 }
 
 async function collectAllFavoriteIds(
   button: HTMLButtonElement,
+  spec: FavoritesClearSpec,
 ): Promise<string[]> {
-  const maxPage = readMaxPage();
+  let maxPage = readMaxPage();
   const ids = new Set<string>();
   for (let page = 1; page <= maxPage; page += 1) {
     setStatus(button, `Scan ${page}/${maxPage} · ${ids.size}`);
-    const url = page === 1 ? "/favorite-clips" : `/favorite-clips?page=${page}`;
+    const url = page === 1 ? spec.path : `${spec.path}?page=${page}`;
     const res = await fetch(url, { credentials: "include" });
     if (!res.ok) throw new Error(`scan page ${page} failed`);
     const html = await res.text();
-    for (const match of html.matchAll(
-      /data-ta="view"\s+data-tl="scene"\s+data-tid="(\d+)"/g,
-    )) {
+    if (page === 1) maxPage = Math.max(maxPage, readMaxPage(html));
+    for (const match of html.matchAll(spec.idRe)) {
       ids.add(match[1]);
     }
     setStatus(button, `Scan ${page}/${maxPage} · ${ids.size}`);
@@ -196,13 +245,16 @@ async function collectAllFavoriteIds(
   return [...ids];
 }
 
-async function toggleFavoriteOff(sceneId: string): Promise<void> {
-  const url = `/Favorites/Toggle?favID=${encodeURIComponent(sceneId)}&favType=${FAV_TYPE_CLIP}&salt=${Date.now()}`;
+async function toggleFavoriteOff(
+  favId: string,
+  favType: number,
+): Promise<void> {
+  const url = `/Favorites/Toggle?favID=${encodeURIComponent(favId)}&favType=${favType}&salt=${Date.now()}`;
   const res = await fetch(url, {
     credentials: "include",
     headers: { Accept: "application/json" },
   });
-  if (!res.ok) throw new Error(`toggle ${sceneId} failed`);
+  if (!res.ok) throw new Error(`toggle ${favId} failed`);
 }
 
 async function mapPool<T>(
@@ -211,12 +263,15 @@ async function mapPool<T>(
   worker: (item: T) => Promise<void>,
 ): Promise<void> {
   let next = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next;
-      next += 1;
-      await worker(items[index]);
-    }
-  });
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const index = next;
+        next += 1;
+        await worker(items[index]);
+      }
+    },
+  );
   await Promise.all(runners);
 }
