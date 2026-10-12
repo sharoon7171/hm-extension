@@ -14,5 +14,3 @@ export function getFirebaseApp(): FirebaseApp {
   });
   return cached;
 }
-
-export const HOSTING_DOMAIN = import.meta.env.VITE_FIREBASE_HOSTING_DOMAIN;
