@@ -16,6 +16,12 @@ const STAR_BIO_URL_RE =
 const FAVORITE_CLIPS_URL_RE =
   /^https?:\/\/(?:www\.)?hotmovies\.com\/favorite-clips(?:[/?#]|$)/i;
 
+const FAVORITE_PERFORMERS_URL_RE =
+  /^https?:\/\/(?:www\.)?hotmovies\.com\/favorite-performers(?:[/?#]|$)/i;
+
+const FAVORITE_STUDIOS_URL_RE =
+  /^https?:\/\/(?:www\.)?hotmovies\.com\/favorite-studios(?:[/?#]|$)/i;
+
 export function matchScenePage(url: string): { sceneId: string } | null {
   const clip = url.match(SCENE_URL_RE);
   if (clip) return { sceneId: clip[1] };
@@ -41,4 +47,12 @@ export function matchStarBioPage(url: string): { starId: string } | null {
 
 export function matchFavoriteClipsPage(url: string): boolean {
   return FAVORITE_CLIPS_URL_RE.test(url);
+}
+
+export function matchFavoritePerformersPage(url: string): boolean {
+  return FAVORITE_PERFORMERS_URL_RE.test(url);
+}
+
+export function matchFavoriteStudiosPage(url: string): boolean {
+  return FAVORITE_STUDIOS_URL_RE.test(url);
 }
