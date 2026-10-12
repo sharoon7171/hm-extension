@@ -24,9 +24,9 @@ import {
   showFavoriteButtonHighlight,
 } from "./favorite-button-highlight";
 import {
-  disableFavoriteClipsClear,
-  enableFavoriteClipsClear,
-} from "./favorite-clips-clear";
+  disableFavoritesClear,
+  enableFavoritesClear,
+} from "./favorites-clear";
 import { hideFullWidthPlayer, showFullWidthPlayer } from "./full-width-player";
 import { hidePromoBanners, showPromoBanners } from "./hide-promo-banners";
 import { setHideCardsConfig } from "./hide-scene-cards";
@@ -57,6 +57,8 @@ import { hideStarBio, showStarBio } from "./star-page-bio";
 import { hideStudioPageLink, showStudioPageLink } from "./studio-page-link";
 import {
   matchFavoriteClipsPage,
+  matchFavoritePerformersPage,
+  matchFavoriteStudiosPage,
   matchScenePage,
   matchStarPage,
   matchStudioPage,
@@ -76,7 +78,7 @@ async function run(): Promise<void> {
   applyStar(settings);
   applySceneFavoriteSync();
   applySceneHideButton();
-  applyFavoriteClipsClear();
+  applyFavoritesClear(settings);
   applyAutoFavoriteScene(settings);
   applyAutoHideScene(settings);
   if (!matchScenePage(location.href)) {
@@ -196,9 +198,26 @@ function applySceneHideButton(): void {
   startSceneHideButton(scene.sceneId);
 }
 
-function applyFavoriteClipsClear(): void {
-  if (matchFavoriteClipsPage(location.href)) enableFavoriteClipsClear();
-  else disableFavoriteClipsClear();
+function applyFavoritesClear(settings: Settings): void {
+  if (matchFavoriteClipsPage(location.href) && settings.favoriteClipsClear) {
+    enableFavoritesClear("clips");
+    return;
+  }
+  if (
+    matchFavoritePerformersPage(location.href) &&
+    settings.favoritePerformersClear
+  ) {
+    enableFavoritesClear("performers");
+    return;
+  }
+  if (
+    matchFavoriteStudiosPage(location.href) &&
+    settings.favoriteStudiosClear
+  ) {
+    enableFavoritesClear("studios");
+    return;
+  }
+  disableFavoritesClear();
 }
 
 async function applyScene(settings: Settings): Promise<void> {
