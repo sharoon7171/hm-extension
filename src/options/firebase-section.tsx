@@ -101,21 +101,26 @@ export function FirebaseSection() {
 
 function SignInPanel({ checking }: { checking: boolean }) {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "signingIn">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!EMAIL_RE.test(email.trim())) {
+    const trimmed = email.trim();
+    if (!EMAIL_RE.test(trimmed)) {
       setError("Enter a valid email address.");
       return;
     }
-    setStatus("sending");
+    if (!password) {
+      setError("Enter your password.");
+      return;
+    }
+    setStatus("signingIn");
     try {
-      const response = await sendSignInLink(email.trim());
+      const response = await sendSignIn(trimmed, password);
       if (!response.ok) throw new Error(response.error);
-      setStatus("sent");
     } catch (err) {
       setStatus("idle");
       setError((err as Error).message);
@@ -125,7 +130,7 @@ function SignInPanel({ checking }: { checking: boolean }) {
   return (
     <SectionCard
       title="Cloud sync"
-      subtitle={`${EXTENSION_DISPLAY_NAME}: sign in with a passwordless email link to keep favorited and hidden scenes in sync across devices.${
+      subtitle={`${EXTENSION_DISPLAY_NAME}: sign in with your email and password to keep favorited and hidden scenes in sync across devices.${
         checking ? " Checking account…" : ""
       }`}
     >
@@ -137,6 +142,18 @@ function SignInPanel({ checking }: { checking: boolean }) {
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="you@example.com"
+            autoComplete="username"
+            disabled={status !== "idle"}
+            className={inputClasses.root}
+          />
+        </label>
+        <label className="flex flex-col">
+          <span className={inputClasses.label}>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            autoComplete="current-password"
             disabled={status !== "idle"}
             className={inputClasses.root}
           />
@@ -147,17 +164,10 @@ function SignInPanel({ checking }: { checking: boolean }) {
             disabled={status !== "idle"}
             className={buttonClasses.primary}
           >
-            {status === "sending" ? "Sending link…" : "Send sign-in link"}
+            {status === "signingIn" ? "Signing in…" : "Sign in"}
           </button>
         </div>
         {error ? <p className={noticeClasses.error}>{error}</p> : null}
-        {status === "sent" ? (
-          <p className={noticeClasses.success}>
-            Check {email} for a sign-in link. Click the link in any browser —{" "}
-            {EXTENSION_DISPLAY_NAME} finishes signing you in on this page
-            automatically.
-          </p>
-        ) : null}
       </form>
     </SectionCard>
   );
@@ -306,22 +316,25 @@ function refreshAuthState(): Promise<AuthSnapshot> {
   });
 }
 
-function sendSignInLink(email: string): Promise<AckResponse> {
+function sendSignIn(email: string, password: string): Promise<AckResponse> {
   return new Promise(resolve => {
-    chrome.runtime.sendMessage({ type: "requestSignInLink", email }, (response: AckResponse | undefined) => {
-      if (chrome.runtime.lastError) {
-        resolve({
-          ok: false,
-          error: chrome.runtime.lastError.message ?? "background unavailable",
-        });
-        return;
-      }
-      if (!response) {
-        resolve({ ok: false, error: "background unavailable" });
-        return;
-      }
-      resolve(response);
-    });
+    chrome.runtime.sendMessage(
+      { type: "signIn", email, password },
+      (response: AckResponse | undefined) => {
+        if (chrome.runtime.lastError) {
+          resolve({
+            ok: false,
+            error: chrome.runtime.lastError.message ?? "background unavailable",
+          });
+          return;
+        }
+        if (!response) {
+          resolve({ ok: false, error: "background unavailable" });
+          return;
+        }
+        resolve(response);
+      },
+    );
   });
 }
 
