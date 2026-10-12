@@ -3,15 +3,12 @@ import {
   indexedDBLocalPersistence,
   initializeAuth,
   onAuthStateChanged,
-  sendSignInLinkToEmail,
-  signInWithEmailLink,
+  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   type Auth,
   type User,
 } from "firebase/auth";
-import { getFirebaseApp, HOSTING_DOMAIN } from "./app";
-
-const PENDING_EMAIL_KEY = "hotmovies-extension:pending-signin-email";
+import { getFirebaseApp } from "./app";
 
 let cached: Auth | null = null;
 
@@ -31,32 +28,15 @@ export function watchAuthState(callback: (user: User | null) => void): () => voi
   return onAuthStateChanged(auth, callback);
 }
 
-export async function requestSignInLink(email: string): Promise<void> {
-  const auth = getFirebaseAuth();
-  const url = `https://${HOSTING_DOMAIN}/finish-signin?ext=${chrome.runtime.id}`;
-  await sendSignInLinkToEmail(auth, email, {
-    url,
-    handleCodeInApp: true,
-  });
-  await chrome.storage.local.set({ [PENDING_EMAIL_KEY]: email });
-}
-
-async function readPendingEmail(): Promise<string | null> {
-  const stored = await chrome.storage.local.get(PENDING_EMAIL_KEY);
-  const value = stored[PENDING_EMAIL_KEY];
-  return typeof value === "string" ? value : null;
-}
-
-async function clearPendingEmail(): Promise<void> {
-  await chrome.storage.local.remove(PENDING_EMAIL_KEY);
-}
-
-export async function completeSignInWithLink(url: string): Promise<User> {
-  const email = await readPendingEmail();
-  if (!email) throw new Error("No pending sign-in email found. Request a new link.");
-  const auth = getFirebaseAuth();
-  const credential = await signInWithEmailLink(auth, email, url);
-  await clearPendingEmail();
+export async function signInWithPassword(
+  email: string,
+  password: string,
+): Promise<User> {
+  const credential = await signInWithEmailAndPassword(
+    getFirebaseAuth(),
+    email,
+    password,
+  );
   return credential.user;
 }
 
