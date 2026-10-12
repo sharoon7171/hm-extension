@@ -25,16 +25,12 @@ export type SceneDeleteAllRequest = {
   kind: SceneKind;
 };
 
-export type CompleteSignInRequest = {
-  type: "completeSignIn";
-  url: string;
-};
-
 export type GetAuthStateRequest = { type: "getAuthState" };
 
-export type RequestSignInLinkMessage = {
-  type: "requestSignInLink";
+export type SignInRequest = {
+  type: "signIn";
   email: string;
+  password: string;
 };
 
 export type SignOutRequest = { type: "signOut" };
