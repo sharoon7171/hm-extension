@@ -14,6 +14,9 @@ export type Settings = {
   hideStarBio: boolean;
   autoRedirectStarToClips: boolean;
   favoriteButtonHighlight: boolean;
+  favoriteClipsClear: boolean;
+  favoritePerformersClear: boolean;
+  favoriteStudiosClear: boolean;
   hideFavoritedScenes: boolean;
   highlightFavoritedScenes: boolean;
   hideCustomScenes: boolean;
@@ -39,6 +42,9 @@ const DEFAULTS: Settings = {
   hideStarBio: true,
   autoRedirectStarToClips: true,
   favoriteButtonHighlight: true,
+  favoriteClipsClear: true,
+  favoritePerformersClear: true,
+  favoriteStudiosClear: true,
   hideFavoritedScenes: false,
   highlightFavoritedScenes: false,
   hideCustomScenes: false,
