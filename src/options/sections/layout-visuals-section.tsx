@@ -28,7 +28,7 @@ export function LayoutVisualsSection({
       />
       <ToggleRow
         title="Custom HLS player"
-        hint={`${EXTENSION_DISPLAY_NAME} replaces the embedded site player with a custom HLS player tuned for aggressive pre-buffering, with live download speed, quality selector, and keyboard shortcuts.`}
+        hint={`${EXTENSION_DISPLAY_NAME} replaces the embedded site player with a custom HLS player tuned for aggressive pre-buffering, with live download speed and quality selector.`}
         checked={settings.customPlayer}
         onToggle={() => update({ customPlayer: !settings.customPlayer })}
         ariaLabel="Toggle custom HLS player"

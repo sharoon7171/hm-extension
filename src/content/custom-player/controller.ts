@@ -399,7 +399,6 @@ export function createPlayerController(): PlayerController {
     ui.root.addEventListener("mousemove", () => {
       ui.root.style.cursor = "";
     });
-    ui.root.addEventListener("keydown", onKey);
   };
 
   const resumeLoadingAtPlayhead = (): void => {
@@ -553,28 +552,6 @@ export function createPlayerController(): PlayerController {
     const target = event.target as Node | null;
     if (target && ui.menu.wrapper.contains(target)) return;
     menu.close();
-  };
-
-  const onKey = (event: KeyboardEvent): void => {
-    if (event.target instanceof HTMLInputElement) return;
-    if (event.key === " " || event.key === "k") {
-      event.preventDefault();
-      togglePlay();
-    } else if (event.key === "ArrowRight") {
-      nudgeSeek(SKIP_SECONDS);
-    } else if (event.key === "ArrowLeft") {
-      nudgeSeek(-SKIP_SECONDS);
-    } else if (event.key === "f") {
-      toggleFullscreen();
-    } else if (event.key === "m") {
-      ui.video.muted = !ui.video.muted;
-    } else if (event.key === "r" && recordingEnabled) {
-      event.preventDefault();
-      void toggleRecording();
-    } else if (event.key === "p" && recordingEnabled && recorder.isRecording()) {
-      event.preventDefault();
-      toggleRecordPause();
-    }
   };
 
   const syncRecordButton = (): void => {
