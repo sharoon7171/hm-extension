@@ -9,6 +9,7 @@ import {
 import { optionsClasses as cls, POPPINS_STYLE } from "../ui-classes/options";
 import { FirebaseSection } from "./firebase-section";
 import { AutoActionsSection } from "./sections/auto-actions-section";
+import { FavoritesClearSection } from "./sections/favorites-clear-section";
 import { GridFiltersSection } from "./sections/grid-filters-section";
 import { HideClutterSection } from "./sections/hide-clutter-section";
 import { LayoutVisualsSection } from "./sections/layout-visuals-section";
@@ -40,6 +41,7 @@ export function OptionsApp() {
         </header>
         <div className={cls.grid}>
           <AutoActionsSection settings={settings} update={update} />
+          <FavoritesClearSection settings={settings} update={update} />
           <GridFiltersSection settings={settings} update={update} />
           <LayoutVisualsSection settings={settings} update={update} />
           <HideClutterSection settings={settings} update={update} />
